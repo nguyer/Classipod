@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Update Android Gradle Plugin to 9.1.1 so Android SDK 37.0 resolves correctly
+  when building installable APKs.
+
 - Download Subsonic/Navidrome songs for offline playback in Original/raw or
   High/320, Medium/192, and Low/128 kbps MP3 quality. Remember the last quality,
   persist download metadata, prefer completed audio during local playback,
