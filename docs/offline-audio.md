@@ -106,6 +106,11 @@ remote speakers.
 
 ## APKs built by GitHub Actions
 
+On a new fork, open the repository's **Actions** tab and select
+**I understand my workflows, go ahead and enable them** once. GitHub disables
+inherited workflows by default. If a PR was already opened while Actions was
+disabled, push a new commit to its branch to trigger the checks.
+
 Pull requests run **PR checks and Android APK** automatically. The workflow
 analyzes the code and runs the full test suite with coverage, then builds a
 signed dev/debug APK for ARM and ARM64 phones. The existing 1,000-track
