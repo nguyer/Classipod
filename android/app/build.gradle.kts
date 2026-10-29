@@ -39,6 +39,19 @@ android {
     }
 
     signingConfigs {
+        // Only the dev/debug CI build opts in to the persistent test key.
+        // Production releases continue using their separate signing config.
+        getByName("debug") {
+            val testKeystorePath = System.getenv("CLASSIPOD_TEST_KEYSTORE_PATH")
+            if (!testKeystorePath.isNullOrBlank()) {
+                val testKeystore = file(testKeystorePath)
+                check(testKeystore.isFile) { "Configured test signing key is missing." }
+                storeFile = testKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as? String
             keyPassword = keystoreProperties["keyPassword"] as? String

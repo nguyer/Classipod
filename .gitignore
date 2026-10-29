@@ -46,6 +46,8 @@ app.*.map.json
 /android/app/release
 .env
 *.jks
+*.keystore
+*.keystore.base64
 key.properties
 google_service_account.json
 **/fastlane/report.xml

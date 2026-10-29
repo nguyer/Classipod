@@ -123,7 +123,24 @@ coverage are kept for 14 days. New commits cancel older runs on the same PR.
 A manual **Run workflow** button is available once this workflow is on the
 repository's default branch.
 
-CI generates a temporary Android debug signing key on each runner. It differs
-from the locally built test APK and may differ between runs. Android requires
-uninstalling a differently signed build before installing this one; uninstalling
-removes settings and downloaded music. Production release signing is unchanged.
+CI builds use a persistent, dedicated test signing key stored in the repository
+Actions secret `CLASSIPOD_TEST_KEYSTORE_BASE64`. The build restores it only for
+the job, checks its public certificate against `.github/test-signing.sha256`,
+and removes the temporary file afterward. No private key is committed. A
+missing or changed key stops the build instead of silently signing with a new
+identity. APK builds run only for branches in this repository; PRs from other
+forks run tests without receiving the signing key.
+
+After installing the first APK signed with this key, later CI APKs install as
+updates and preserve settings and downloaded music. Older builds used temporary
+keys; moving from one of those may require one final uninstall, which removes
+app data. The old CI keys cannot be recovered from the APK. Keep the test key
+backed up and do not rotate it casually. Production release signing is unchanged.
+
+To configure another fork, generate a dedicated Android debug keystore with
+alias `androiddebugkey`, store/key password `android`, and a long validity.
+Store its base64 contents in the Actions secret above. Export its DER certificate
+with `keytool -exportcert` and put the certificate SHA-256 (lowercase hex) in
+`.github/test-signing.sha256`. Never use a production release key for PR builds.
+Local test builds can opt into the same key by setting
+`CLASSIPOD_TEST_KEYSTORE_PATH` to an absolute keystore path outside the checkout.

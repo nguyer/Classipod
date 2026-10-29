@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reuse a dedicated signing key from Actions secrets for test APKs, allowing
+  later CI builds to install as updates without clearing app data. Validate
+  the signing certificate and keep release signing separate.
+
 - Replace the two whole-library download actions with Make entire library
   available offline. Discover new downloads only during library scans;
   remove timed checks. Keep saved and pending tracks in a Downloaded music
