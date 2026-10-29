@@ -722,5 +722,56 @@
   "coverFlowBigTitle": "Big",
   "@coverFlowBigTitle": {
     "description": "The Cover Flow appearance option with larger album artwork, showing a centered cover and one tilted cover on each side, up to three covers total"
-  }
+  },
+  "offlineAudioTitle": "Download",
+  "offlineAudioPrompt": "Choose download quality. MP3 conversion requires server transcoding support. Downloads follow your network setting in Settings > Downloads.",
+  "offlineAudioSaving": "Adding to downloads…",
+  "offlineAudioError": "Download failed. Check your connection, server transcoding settings and available storage, then retry.",
+  "offlineAudioStorageError": "Download storage is unavailable.",
+  "offlineAudioRemove": "Remove download",
+  "offlineAudioOriginal": "Original / raw",
+  "offlineAudioHigh": "High / 320 kbps MP3",
+  "offlineAudioMedium": "Medium / 192 kbps MP3",
+  "offlineAudioLow": "Low / 128 kbps MP3",
+  "downloadsTitle": "Downloads",
+  "downloadQuality": "Download quality",
+  "downloadWifiOnly": "Wi-Fi only",
+  "downloadKeepLibrary": "Make entire library available offline",
+  "downloadKeepLibraryPrompt": "Download all {count} songs at {quality}? New tracks will download when a library refresh or scan discovers them. This may use substantial storage.",
+  "@downloadKeepLibraryPrompt": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "quality": {
+        "type": "String"
+      }
+    }
+  },
+  "downloadSelectionPrompt": "Add {count} server songs to Downloads? Saved songs are skipped. Local phone files are not downloaded. Downloads follow your network setting in Settings > Downloads.",
+  "@downloadSelectionPrompt": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "downloadPause": "Pause downloads",
+  "downloadResume": "Resume downloads",
+  "downloadPaused": "Downloads paused",
+  "downloadRetryFailed": "Retry failed downloads",
+  "downloadClearQueue": "Clear download queue",
+  "downloadClearQueuePrompt": "Clear queued downloads? This also turns off Make entire library available offline. Saved music stays on your phone.",
+  "downloadRemoveAll": "Remove all downloads",
+  "downloadRemoveAllPrompt": "Remove all downloaded audio and clear the queue? This also turns off Make entire library available offline. Your server music and playlists stay unchanged.",
+  "downloadRemoveTrackPrompt": "Remove this download and its queued job? If Make entire library available offline is on, this song stays excluded until you download it again.",
+  "downloadQueueEmpty": "No queued downloads",
+  "downloadWaitingWifi": "Waiting for Wi-Fi",
+  "downloadWaitingNetwork": "Waiting for a network connection",
+  "downloadQueued": "Queued",
+  "downloadFailed": "Failed",
+  "downloadCompleted": "Downloaded",
+  "downloadStorageFull": "Storage is full. Free space, then resume downloads.",
+  "downloadedMusicTitle": "Downloaded music",
+  "downloadedMusicEmpty": "No downloaded or queued music"
 }

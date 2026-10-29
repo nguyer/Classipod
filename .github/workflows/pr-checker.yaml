@@ -1,21 +1,32 @@
-name: Lint Checking on PR
+name: PR checks and Android APK
 
 on:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   FLUTTER_VERSION: 3.47.6
 
 jobs:
   lint:
+    name: Analyze and test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - name: Install native metadata build dependencies
         run: |
@@ -29,11 +40,113 @@ jobs:
 
       - name: Lint Dart files
         run: |
-          dart analyze --no-fatal-warnings
+          flutter analyze --no-pub --suppress-analytics
+
+      - name: Test signing key restoration
+        run: python3 -m unittest discover -s scripts -p 'test_android_test_signing.py'
 
       - name: Run Flutter Tests
         run: |
           flutter test --no-pub --coverage --suppress-analytics
+
+      - name: Upload test coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/lcov.info
+          if-no-files-found: warn
+          retention-days: 14
+
+  android-apk:
+    # Secrets are never exposed to code from another repository.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    name: Build test APK
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools platforms;android-37.0 build-tools;37.0.0
+            ndk;28.2.13676358 cmake;3.22.1
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Restore persistent test signing key
+        env:
+          CLASSIPOD_TEST_KEYSTORE_BASE64: ${{ secrets.CLASSIPOD_TEST_KEYSTORE_BASE64 }}
+        run: python3 scripts/restore_android_test_keystore.py
+
+      - name: Build Android test APK
+        # This script also runs pub get and checks native plugin registration.
+        shell: pwsh
+        run: |
+          $buildNumber = 1000 + [int]$env:GITHUB_RUN_NUMBER
+          ./scripts/build_android_test.ps1 -BuildNumber $buildNumber
+
+      - name: Verify APK signing identity
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          signer = Path(os.environ['ANDROID_HOME']) / 'build-tools/37.0.0/apksigner'
+          apk = 'build/app/outputs/flutter-apk/app-dev-debug.apk'
+          report = subprocess.check_output(
+              [str(signer), 'verify', '--print-certs', apk], text=True)
+          expected = Path('.github/test-signing.sha256').read_text().strip()
+          actual = re.findall(r'certificate SHA-256 digest: ([0-9a-fA-F]+)', report)
+          if not actual or {value.lower() for value in actual} != {expected}:
+              raise SystemExit('APK signing identity does not match the persistent test key.')
+          print('Verified APK signing certificate SHA-256:', expected)
+          PY
+
+      - name: Upload APK
+        id: apk
+        uses: actions/upload-artifact@v7
+        with:
+          name: Classipod-Android-APK-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/app/outputs/flutter-apk/app-dev-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Show APK download link
+        env:
+          ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
+        run: |
+          {
+            echo '### Android test APK'
+            echo
+            echo "[Download the APK archive]($ARTIFACT_URL), extract it, and install app-dev-debug.apk."
+            echo
+            echo 'Built after analysis and tests passed. Includes ARM and ARM64 phones.'
+            echo 'Artifacts expire after 14 days. GitHub sign-in is required to download.'
+            echo 'Uses the persistent Classipod test signing key. Future builds signed with this key install as updates and preserve app data.'
+            echo 'Older builds used temporary keys and may require one final uninstall, which removes settings and downloads.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/classipod-test.keystore"
 
   large-library:
     runs-on: ubuntu-latest

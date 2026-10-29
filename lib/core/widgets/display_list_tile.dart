@@ -9,12 +9,14 @@ class DisplayListTile extends StatelessWidget {
   final String text;
   final bool isSelected;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   const DisplayListTile({
     super.key,
     required this.text,
     required this.isSelected,
     this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -27,6 +29,7 @@ class DisplayListTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: SizedBox(
         height: 30,
         width: double.infinity,

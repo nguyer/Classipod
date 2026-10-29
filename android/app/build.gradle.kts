@@ -39,6 +39,19 @@ android {
     }
 
     signingConfigs {
+        // Only the dev/debug CI build opts in to the persistent test key.
+        // Production releases continue using their separate signing config.
+        getByName("debug") {
+            val testKeystorePath = System.getenv("CLASSIPOD_TEST_KEYSTORE_PATH")
+            if (!testKeystorePath.isNullOrBlank()) {
+                val testKeystore = file(testKeystorePath)
+                check(testKeystore.isFile) { "Configured test signing key is missing." }
+                storeFile = testKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as? String
             keyPassword = keystoreProperties["keyPassword"] as? String
@@ -83,4 +96,17 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// An APK can compile without this generated source, but then every native
+// plugin is absent at runtime and startup never reaches the app interface.
+tasks.named("preBuild") {
+    doFirst {
+        check(file("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java").isFile) {
+            "Android plugin registration is missing. Run flutter pub get " +
+                "successfully before building; do not use --no-pub after " +
+                "dependency setup fails. On Windows, use " +
+                "scripts/build_android_test.ps1 for Android-only setup."
+        }
+    }
 }

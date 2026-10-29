@@ -11,6 +11,7 @@ import 'package:classipod/features/settings/controller/settings_preferences_cont
 import 'package:classipod/features/settings/models/settings_preferences_model.dart';
 import 'package:classipod/features/settings/widgets/settings_list_tile.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -33,6 +34,7 @@ enum _SettingsDisplayItems {
   immersiveMode,
   showAppTutorial,
   librarySettings,
+  downloads,
   resetSettings,
   donate;
 
@@ -70,6 +72,8 @@ enum _SettingsDisplayItems {
         return context.localization.immersiveModeSettingTitle;
       case showAppTutorial:
         return context.localization.showAppTutorialSettingTitle;
+      case downloads:
+        return context.localization.downloadsTitle;
       case librarySettings:
         return context.localization.librarySettingsScreenTitle;
       case resetSettings:
@@ -93,7 +97,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   String get routeName => Routes.settings.name;
 
   @override
-  List<_SettingsDisplayItems> get displayItems => _SettingsDisplayItems.values;
+  List<_SettingsDisplayItems> get displayItems => [
+    for (final item in _SettingsDisplayItems.values)
+      if (!kIsWeb || item != _SettingsDisplayItems.downloads) item,
+  ];
 
   @override
   Future<void> onSelectPressed() =>
@@ -102,6 +109,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Future<void> _settingAction(_SettingsDisplayItems settingItem) async {
     setState(() => selectedDisplayItem = displayItems.indexOf(settingItem));
     switch (settingItem) {
+      case _SettingsDisplayItems.downloads:
+        context.goNamed(Routes.downloads.name);
+        break;
       case _SettingsDisplayItems.about:
         context.goNamed(Routes.about.name);
         break;

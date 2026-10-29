@@ -6,7 +6,9 @@ import 'package:classipod/core/widgets/options_list_tile.dart';
 import 'package:classipod/features/custom_screen_elements/custom_screen.dart';
 import 'package:classipod/features/music/album/providers/album_details_provider.dart';
 import 'package:classipod/features/music/playlist/providers/playlists_provider.dart';
+import 'package:classipod/features/settings/widgets/download_dialog.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,6 +16,7 @@ enum _SongsMoreOptions {
   addToOnTheGo,
   browseAlbum,
   browseArtist,
+  download,
   cancel;
 
   String title(BuildContext context) {
@@ -26,6 +29,8 @@ enum _SongsMoreOptions {
         return context.localization.browseArtist;
       case cancel:
         return context.localization.cancelText;
+      case download:
+        return context.localization.offlineAudioTitle;
     }
   }
 }
@@ -56,16 +61,21 @@ class _SongsMoreOptionsModalState extends ConsumerState<SongsMoreOptionsModal>
     _SongsMoreOptions.addToOnTheGo,
     if (widget.showAdditionalOptions) _SongsMoreOptions.browseAlbum,
     if (widget.showAdditionalOptions) _SongsMoreOptions.browseArtist,
+    if (!kIsWeb && widget.currentSongMetadata.isSubsonic)
+      _SongsMoreOptions.download,
     _SongsMoreOptions.cancel,
   ];
 
   @override
   Future<void> onSelectPressed() =>
-      _navigateToScreen(_SongsMoreOptions.values[selectedDisplayItem]);
+      _navigateToScreen(displayItems[selectedDisplayItem]);
 
   Future<void> _navigateToScreen(_SongsMoreOptions optionItem) async {
     setState(() => selectedDisplayItem = displayItems.indexOf(optionItem));
     switch (optionItem) {
+      case _SongsMoreOptions.download:
+        await showDownloadDialog(context, widget.currentSongMetadata);
+        break;
       case _SongsMoreOptions.addToOnTheGo:
         ref
             .read(playlistsProvider.notifier)

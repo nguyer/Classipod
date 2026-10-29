@@ -136,6 +136,25 @@ class SubsonicClient {
     await request('ping');
   }
 
+  /// Streams bytes without buffering an entire album track in memory.
+  Future<http.StreamedResponse> audio(
+    String id,
+    Map<String, String> quality,
+  ) async {
+    final response = await _http
+        .send(http.Request('GET', uri('stream', {'id': id, ...quality})))
+        .timeout(const Duration(seconds: 30));
+    final type = (response.headers['content-type'] ?? '').toLowerCase();
+    if (response.statusCode != 200 ||
+        !(type.startsWith('audio/') ||
+            type.startsWith('application/octet-stream') ||
+            type.startsWith('application/ogg'))) {
+      await response.stream.drain<void>();
+      throw const SubsonicException('download');
+    }
+    return response;
+  }
+
   Future<Uint8List> artwork(String id) async {
     final response = await _get('getCoverArt', {'id': id, 'size': '600'});
     if (!(response.headers['content-type'] ?? '').startsWith('image/') ||

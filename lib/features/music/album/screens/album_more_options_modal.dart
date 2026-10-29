@@ -5,13 +5,16 @@ import 'package:classipod/core/widgets/options_list_tile.dart';
 import 'package:classipod/features/custom_screen_elements/custom_screen.dart';
 import 'package:classipod/features/music/album/models/album_model.dart';
 import 'package:classipod/features/music/playlist/providers/playlists_provider.dart';
+import 'package:classipod/features/settings/widgets/download_dialog.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 enum _AlbumMoreOptions {
   addAlbumToOnTheGo,
   browseArtist,
+  download,
   cancel;
 
   String title(BuildContext context) {
@@ -20,6 +23,8 @@ enum _AlbumMoreOptions {
         return context.localization.addAlbumToOnTheGoPlaylist;
       case browseArtist:
         return context.localization.browseArtist;
+      case download:
+        return context.localization.offlineAudioTitle;
       case cancel:
         return context.localization.cancelText;
     }
@@ -51,16 +56,24 @@ class _AlbumMoreOptionsModalState extends ConsumerState<AlbumMoreOptionsModal>
   List<_AlbumMoreOptions> get displayItems => [
     _AlbumMoreOptions.addAlbumToOnTheGo,
     if (widget.showBrowseArtist) _AlbumMoreOptions.browseArtist,
+    if (!kIsWeb && widget.albumDetail.albumSongs.any((song) => song.isSubsonic))
+      _AlbumMoreOptions.download,
     _AlbumMoreOptions.cancel,
   ];
 
   @override
   Future<void> onSelectPressed() =>
-      _performAction(_AlbumMoreOptions.values[selectedDisplayItem]);
+      _performAction(displayItems[selectedDisplayItem]);
 
   Future<void> _performAction(_AlbumMoreOptions optionItem) async {
     setState(() => selectedDisplayItem = displayItems.indexOf(optionItem));
     switch (optionItem) {
+      case _AlbumMoreOptions.download:
+        await showCollectionDownloadDialog(
+          context,
+          widget.albumDetail.albumSongs,
+        );
+        break;
       case _AlbumMoreOptions.addAlbumToOnTheGo:
         ref
             .read(playlistsProvider.notifier)

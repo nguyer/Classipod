@@ -34,6 +34,8 @@ import 'package:classipod/features/settings/controller/exclude_directories_contr
 import 'package:classipod/features/settings/controller/settings_preferences_controller.dart';
 import 'package:classipod/features/settings/screens/about_screen.dart';
 import 'package:classipod/features/settings/screens/device_color_selection_screen.dart';
+import 'package:classipod/features/settings/screens/downloaded_music_screen.dart';
+import 'package:classipod/features/settings/screens/downloads_screen.dart';
 import 'package:classipod/features/settings/screens/exclude_directories_screen.dart';
 import 'package:classipod/features/settings/screens/language_selection_screen.dart';
 import 'package:classipod/features/settings/screens/library_settings_screen.dart';
@@ -52,6 +54,8 @@ enum Routes {
   menu,
   settings,
   librarySettings,
+  downloads,
+  downloadedMusic,
   about,
   language,
   deviceColor,
@@ -95,6 +99,10 @@ enum Routes {
         return context.localization.menuScreenTitle;
       case settings:
         return context.localization.settingsScreenTitle;
+      case downloadedMusic:
+        return context.localization.downloadedMusicTitle;
+      case downloads:
+        return context.localization.downloadsTitle;
       case librarySettings:
         return context.localization.librarySettingsScreenTitle;
       case about:
@@ -261,6 +269,27 @@ final routerProvider = Provider(
                         pageBuilder: (context, state) => const CupertinoPage(
                           child: DeviceColorSelectionScreen(),
                         ),
+                      ),
+                      GoRoute(
+                        path: Routes.downloads.name,
+                        name: Routes.downloads.name,
+                        parentNavigatorKey: rootNavigatorKey,
+                        pageBuilder: (context, state) => const CupertinoPage(
+                          child: ScreenPageContent(child: DownloadsScreen()),
+                        ),
+                        routes: [
+                          GoRoute(
+                            path: Routes.downloadedMusic.name,
+                            name: Routes.downloadedMusic.name,
+                            parentNavigatorKey: rootNavigatorKey,
+                            pageBuilder: (context, state) =>
+                                const CupertinoPage(
+                                  child: ScreenPageContent(
+                                    child: DownloadedMusicScreen(),
+                                  ),
+                                ),
+                          ),
+                        ],
                       ),
                       GoRoute(
                         path: Routes.librarySettings.name,
