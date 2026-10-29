@@ -103,3 +103,23 @@ phone-local files for remote outputs. Discovery, transport and grouping remain
 separate future output services; a Sonos speaker must be able to reach the
 server URI itself. Never send file: URIs or persist authenticated URLs for
 remote speakers.
+
+## APKs built by GitHub Actions
+
+Pull requests run **PR checks and Android APK** automatically. The workflow
+analyzes the code and runs the full test suite with coverage, then builds a
+signed dev/debug APK for ARM and ARM64 phones. The existing 1,000-track
+stress check also runs independently. No release signing secrets are needed.
+
+Open the pull request's Checks, choose **Build test APK**, and open the workflow
+run. Its summary contains an APK download link; alternatively, choose
+**Classipod-Android-APK-...** under Artifacts. Sign into GitHub, download and
+extract the archive, then install `app-dev-debug.apk`. Artifacts and test
+coverage are kept for 14 days. New commits cancel older runs on the same PR.
+A manual **Run workflow** button is available once this workflow is on the
+repository's default branch.
+
+CI generates a temporary Android debug signing key on each runner. It differs
+from the locally built test APK and may differ between runs. Android requires
+uninstalling a differently signed build before installing this one; uninstalling
+removes settings and downloaded music. Production release signing is unchanged.
