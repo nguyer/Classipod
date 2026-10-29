@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Prevent test APKs from being packaged without Android plugin registration.
+  Add an Android-only Windows build script to avoid desktop symlink setup
+  interrupting generation and leaving the app stuck on its startup spinner.
+
 - Update Android Gradle Plugin to 9.1.1 so Android SDK 37.0 resolves correctly
   when building installable APKs.
 

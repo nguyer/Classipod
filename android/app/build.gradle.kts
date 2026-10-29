@@ -84,3 +84,16 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// An APK can compile without this generated source, but then every native
+// plugin is absent at runtime and startup never reaches the app interface.
+tasks.named("preBuild") {
+    doFirst {
+        check(file("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java").isFile) {
+            "Android plugin registration is missing. Run flutter pub get " +
+                "successfully before building; do not use --no-pub after " +
+                "dependency setup fails. On Windows, use " +
+                "scripts/build_android_test.ps1 for Android-only setup."
+        }
+    }
+}

@@ -1,5 +1,23 @@
 # Offline Subsonic / Navidrome audio
 
+## Building a phone test APK on Windows
+
+Run `./scripts/build_android_test.ps1` with Flutter on PATH, or pass
+`-FlutterExecutable` with the path to `flutter.bat`. This generates Android
+plugin registration before building the `dev` flavor using the normal app
+entry point. It temporarily disables desktop targets only for that process,
+so desktop symlink requirements cannot interrupt Android dependency setup.
+The APK is `build/app/outputs/flutter-apk/app-dev-debug.apk` and installs as
+Classipod Dev alongside the production app.
+
+Do not continue with `--no-pub` after `flutter pub get` fails: an APK without
+`GeneratedPluginRegistrant` can compile and pass signature verification but
+cannot initialize native storage or audio plugins. The Android pre-build task
+now rejects this condition. Verify the built app actually reaches its menu
+on an Android device or emulator before sharing it.
+
+## Downloading songs
+
 On Android, open a Subsonic song's options and select **Offline audio**.
 Choose Original (raw), High (320 kbps MP3), Medium (192 kbps MP3), or
 Low (128 kbps MP3). The last choice is saved as the default. Choose
