@@ -15,12 +15,14 @@ import 'package:classipod/features/music/artists/providers/artist_names_provider
 import 'package:classipod/features/music/artists/screens/artists_selection_screen.dart';
 import 'package:classipod/features/music/playlist/models/playlist_model.dart';
 import 'package:classipod/features/music/playlist/screens/playlists_screen.dart';
+import 'package:classipod/features/settings/screens/downloaded_music_screen.dart';
 import 'package:classipod/features/settings/screens/downloads_screen.dart';
 import 'package:classipod/hive/hive_registrar.g.dart';
 import 'package:classipod/l10n/generated/app_localizations.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -194,11 +196,26 @@ void main() {
       });
       await open(tester, const DownloadsScreen());
       expect(find.textContaining('3 B'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('Remove all downloads'),
-        80,
-        scrollable: find.byType(Scrollable).first,
+      expect(
+        find.text('Make entire library available offline'),
+        findsOneWidget,
       );
+      expect(find.text('Download all music'), findsNothing);
+      expect(find.text('Keep entire library offline'), findsNothing);
+      expect(find.text('a'), findsNothing);
+      expect(find.text('b'), findsNothing);
+      // The wheel must reveal the last row despite the storage/progress header.
+      final dynamic screen = tester.state(find.byType(DownloadsScreen));
+      for (var i = 0; i < 20; i++) {
+        screen.scrollForward();
+        await tester.pump();
+      }
+      final listRect = tester.getRect(find.byType(ListView));
+      final lastRow = tester.getRect(find.text('Downloaded music'));
+      expect(lastRow.bottom, lessThanOrEqualTo(listRect.bottom));
+      expect(lastRow.top, greaterThanOrEqualTo(listRect.top));
+      screen.scrollBackward();
+      await tester.pump();
       await tester.runAsync(() async {
         await tester.tap(find.text('Remove all downloads'));
       });
@@ -223,4 +240,82 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     },
   );
+  testWidgets(
+    'downloaded music opens its own submenu with saved and queued songs',
+    (tester) async {
+      final client = SubsonicClient(
+        _config,
+        'secret',
+        client: MockClient(
+          (_) async => http.Response.bytes(
+            [1, 2, 3],
+            200,
+            headers: {'content-type': 'audio/mpeg'},
+          ),
+        ),
+      );
+      addTearDown(client.close);
+      await tester.runAsync(() async {
+        await store.download(client, songs.first);
+        await queue.enqueue(
+          [songs[1]],
+          DownloadQuality.high,
+          serverId: _config.id,
+        );
+      });
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const DownloadsScreen(),
+            routes: [
+              GoRoute(
+                path: 'downloadedMusic',
+                name: 'downloadedMusic',
+                builder: (_, _) => const DownloadedMusicScreen(),
+              ),
+            ],
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.binding.setSurfaceSize(const Size(320, 240));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: CupertinoApp.router(
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: const [Locale('en')],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Downloaded music'),
+        80,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Downloaded music'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DownloadedMusicScreen), findsOneWidget);
+      expect(find.text('a'), findsOneWidget);
+      expect(find.text('b'), findsOneWidget);
+      expect(find.text('Downloaded'), findsOneWidget);
+      expect(find.text('Queued'), findsOneWidget);
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('a'), findsNothing);
+      expect(find.text('b'), findsNothing);
+      expect(find.text('Downloaded music'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    },
+  );
+
+  testWidgets('downloaded music submenu has an empty state', (tester) async {
+    await open(tester, const DownloadedMusicScreen());
+    expect(find.text('No downloaded or queued music'), findsOneWidget);
+  });
 }

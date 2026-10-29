@@ -50,10 +50,6 @@ final downloadRecordsChangesProvider = StreamProvider<void>((ref) async* {
   yield* downloads.box.watch().map((_) {});
 });
 
-final downloadClockProvider = Provider<DateTime Function()>(
-  (_) => DateTime.now,
-);
-
 final downloadNetworkAllowedProvider = Provider<Future<bool> Function(bool)>(
   (_) => (wifiOnly) async {
     try {
@@ -117,8 +113,6 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
   SubsonicDownloads? _downloads;
   SubsonicDownloadQueue? _queue;
   bool _foreground = false;
-  Future<void>? _automaticTick;
-  DateTime? _lastAutomaticScan;
   int _generation = 0;
   static const _preferenceKey = 'subsonicConfig';
 
@@ -217,32 +211,6 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
     }
   }
 
-  Future<void> automaticDownloadTick() => _automaticTick ??=
-      _automaticDownloadTick().whenComplete(() => _automaticTick = null);
-
-  Future<void> _automaticDownloadTick() async {
-    if (kIsWeb || !_foreground || !_current.enabled || _client == null) return;
-    final generation = _generation;
-    final queue = await _downloadQueue();
-    if (!_foreground || generation != _generation || _current.config == null) {
-      return;
-    }
-    final id = _current.config!.id;
-    final automatic = queue.autoDownload(id) && !queue.paused(id);
-    if (automatic &&
-        await ref.read(downloadNetworkAllowedProvider)(queue.wifiOnly(id)) &&
-        generation == _generation &&
-        !_current.scanning &&
-        (_lastAutomaticScan == null ||
-            ref.read(downloadClockProvider)().difference(_lastAutomaticScan!) >=
-                const Duration(minutes: 5))) {
-      _lastAutomaticScan = ref.read(downloadClockProvider)();
-      await queue.retry(id, automaticOnly: true);
-      await refresh();
-    }
-    if (_foreground) unawaited(pumpDownloads());
-  }
-
   Future<void> setAutomaticDownloads(bool enabled) async {
     final id = _current.config?.id;
     final generation = _generation;
@@ -270,8 +238,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
         serverId: id,
         automatic: true,
       );
-      _lastAutomaticScan = null;
-      unawaited(automaticDownloadTick().catchError((Object _) {}));
+      unawaited(pumpDownloads());
     } else {
       await queue.stopAutomatic(id);
       unawaited(pumpDownloads());
@@ -463,6 +430,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
         final queue = await _downloadQueue();
         if (generation != _generation) return;
         if (queue.autoDownload(client.config.id)) {
+          await queue.retry(client.config.id, automaticOnly: true);
           await queue.enqueue(
             songs,
             queue.downloads.quality,

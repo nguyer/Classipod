@@ -2,15 +2,14 @@ import 'dart:async';
 
 import 'package:classipod/core/alerts/dialogs.dart';
 import 'package:classipod/core/extensions/build_context_extensions.dart';
-import 'package:classipod/core/models/music_metadata.dart';
 import 'package:classipod/core/navigation/routes.dart';
 import 'package:classipod/core/subsonic/subsonic_controller.dart';
-import 'package:classipod/core/subsonic/subsonic_download_queue.dart';
 import 'package:classipod/features/custom_screen_elements/custom_screen.dart';
 import 'package:classipod/features/settings/widgets/download_dialog.dart';
 import 'package:classipod/features/settings/widgets/settings_list_tile.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 typedef _DownloadRow = ({
   String title,
@@ -35,6 +34,9 @@ class DownloadsScreen extends ConsumerStatefulWidget {
 
 class _DownloadsScreenState extends ConsumerState<DownloadsScreen>
     with CustomScreen {
+  @override
+  bool get useScrollViewport => true;
+
   List<_DownloadRow> _rows = [];
   bool _busy = false;
   @override
@@ -91,45 +93,6 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen>
       false;
   void _pump() =>
       unawaited(ref.read(subsonicControllerProvider.notifier).pumpDownloads());
-  Future<void> _songActions(
-    SubsonicDownloadQueue queue,
-    MusicMetadata song,
-  ) async {
-    final choice = await showCupertinoDialog<String>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text(song.getTrackName),
-        content: Text('${song.getTrackArtistNames}\n${song.albumName ?? ''}'),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop('download'),
-            child: Text(context.localization.offlineAudioTitle),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop('remove'),
-            child: Text(context.localization.offlineAudioRemove),
-          ),
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.localization.cancelText),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    if (choice == 'download') {
-      await showDownloadDialog(context, song);
-    } else if (choice == 'remove' &&
-        await _confirm(
-          context.localization.downloadRemoveTrackPrompt,
-          destructive: true,
-        )) {
-      await queue.remove(song);
-      _pump();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     ref.watch(downloadRecordsChangesProvider);
@@ -171,11 +134,6 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen>
           await queue.setWifiOnly(id, !queue.wifiOnly(id));
           _pump();
         },
-      ),
-      (
-        title: l.downloadAllNow,
-        value: null,
-        action: () => showCollectionDownloadDialog(context, remote!.songs),
       ),
       (
         title: l.downloadKeepLibrary,
@@ -235,22 +193,13 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen>
         },
       ),
     ];
-    final entries = <String, ({MusicMetadata song, String value})>{
-      for (final song in songs)
-        song.identity: (song: song, value: l.downloadCompleted),
-      for (final job in jobs)
-        job.song.identity: (
-          song: job.song,
-          value: job.failed ? l.downloadFailed : l.downloadQueued,
-        ),
-    };
-    for (final entry in entries.values) {
-      _rows.add((
-        title: entry.song.getTrackName,
-        value: entry.value,
-        action: () => _songActions(queue, entry.song),
-      ));
-    }
+    _rows.add((
+      title: l.downloadedMusicTitle,
+      value: '${songs.length}',
+      action: () async {
+        await context.pushNamed(Routes.downloadedMusic.name);
+      },
+    ));
     if (selectedDisplayItem >= _rows.length) selectedDisplayItem = 0;
     return CupertinoPageScaffold(
       child: Column(

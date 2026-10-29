@@ -18,41 +18,40 @@ app while transfers run. Monitor them in **Settings > Downloads**.
 
 ## Manage downloads
 
-Settings > Downloads shows saved song count and storage use, pending/failed
-songs, the current transfer and byte progress. It includes:
+Settings > Downloads shows saved song count and storage use, the current
+transfer and byte progress. Downloaded music opens a separate submenu for
+saved, queued and failed songs. It includes:
 
 - Download quality for newly queued songs: Original/raw, High/320 kbps MP3,
   Medium/192 kbps MP3, or Low/128 kbps MP3. Existing files and queued quality
   choices are not silently changed when the default changes.
 - Wi-Fi only (on by default), or allow any active network including mobile data.
-- Download all music once, or Keep entire library offline.
+- Make entire library available offline.
 - Pause/resume, retry failures, clear the queue, remove one download, or remove
   all downloaded audio. Destructive bulk actions require confirmation.
 
 Completed audio is never deleted from the server, and playlist entries remain
 unchanged. Removing an individual download while automatic library downloads
 are enabled excludes it from future automatic downloads. Download it explicitly
-again, use Download all music, or re-enable Keep entire library offline to
-include it again. Clearing the queue or removing all audio turns automatic
+again, or re-enable Make entire library available offline to include it again. Clearing the queue or removing all audio turns automatic
 library downloads off, preventing immediate redownloads.
 
 ## Automatically keep the whole library offline
 
-Enable **Keep entire library offline** in Settings > Downloads and confirm the
+Enable **Make entire library available offline** in Settings > Downloads and confirm the
 song count and quality. The app queues missing songs from the full server
-catalog, refreshes the catalog at most once every five minutes while open,
-then queues newly added songs. Opening/resuming the app also checks when a
-refresh is due. A manual server refresh likewise picks up new songs for this
-setting. Previously completed music is skipped, and server deletions do not
-automatically remove saved audio.
+catalog. Future library refreshes/scans queue newly discovered songs.
+There is no timer or scheduled library check. Opening/resuming the app and
+network changes only resume existing queued transfers. Previously completed
+music is skipped, and server deletions do not automatically remove saved audio.
 
 This is explicitly foreground-only: transfers pause when the app leaves the
 foreground or the phone locks. No Android background worker or alarm is
 registered. Reopening the app resumes the persistent queue; an interrupted
 song restarts its transfer rather than resuming a partial byte range.
-Automatic checks and transfers honor the network policy and pause setting.
-Automatic failed jobs are retried on the next scheduled check; manual failed
-jobs can be retried from Downloads. A full storage error pauses the queue so
+Transfers honor the network policy and pause setting.
+Automatic failed jobs are retried after the next successful library scan;
+manual failed jobs can be retried from Downloads. A full storage error pauses the queue so
 you can free space before resuming.
 
 The queue survives process termination, deduplicates by account and song ID,
@@ -92,7 +91,7 @@ sharing an APK.
 
 Tests cover the quality mapping, restart persistence, selection ordering,
 deduplication, account isolation, network and lifecycle gating, cancellation,
-failed jobs/retry, low-storage pausing, automatic additions after scheduled
+failed jobs/retry, low-storage pausing, automatic additions after library
 refreshes, exclusions/removal, and album/artist/playlist/settings UI actions.
 
 ## Future Sonos support

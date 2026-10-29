@@ -27,6 +27,9 @@ mixin CustomScreen<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     _viewState?.selectedIndex = value;
   }
 
+  /// Screens with additional headers use the actual list viewport.
+  bool get useScrollViewport => false;
+
   int extraDisplayItems = 0;
   int topStatusBarHeight = 30;
   final double displayTileHeight = 30;
@@ -64,6 +67,21 @@ mixin CustomScreen<T extends ConsumerStatefulWidget> on ConsumerState<T> {
         selectedDisplayItem++;
         wheelScrollIndex.value = selectedDisplayItem;
       });
+
+      if (useScrollViewport && scrollController.hasClients) {
+        final position = scrollController.position;
+        final top = selectedDisplayItem * displayTileHeight;
+        final bottom = top + displayTileHeight;
+        final offset = top < position.pixels
+            ? top
+            : bottom > position.pixels + position.viewportDimension
+            ? bottom - position.viewportDimension
+            : position.pixels;
+        scrollController.jumpTo(
+          offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+        );
+        return;
+      }
 
       final double currentSelectedDisplayItemsHeight =
           (selectedDisplayItem + 1) * displayTileHeight + topStatusBarHeight;

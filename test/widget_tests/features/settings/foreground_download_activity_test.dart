@@ -15,14 +15,14 @@ class _ForegroundController extends SubsonicController {
   }
 
   @override
-  Future<void> automaticDownloadTick() async {
+  Future<void> pumpDownloads() async {
     checks++;
   }
 }
 
 void main() {
   testWidgets(
-    'automatic checks stop in background and restart when the app resumes',
+    'transfers resume on foreground changes without any timed checks',
     (tester) async {
       final controller = _ForegroundController();
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -37,8 +37,8 @@ void main() {
       await tester.pump();
       expect(controller.foreground, isTrue);
       final initial = controller.checks;
-      await tester.pump(const Duration(seconds: 31));
-      expect(controller.checks, greaterThan(initial));
+      await tester.pump(const Duration(hours: 1));
+      expect(controller.checks, initial);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);

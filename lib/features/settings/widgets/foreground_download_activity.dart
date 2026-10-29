@@ -4,7 +4,7 @@ import 'package:classipod/core/subsonic/subsonic_controller.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Foreground-only polling; there is no background worker or wake-up alarm.
+/// Resumes queued transfers on foreground/network changes without scanning.
 class ForegroundDownloadActivity extends ConsumerStatefulWidget {
   const ForegroundDownloadActivity({super.key, required this.child});
   final Widget child;
@@ -14,7 +14,6 @@ class ForegroundDownloadActivity extends ConsumerStatefulWidget {
 
 class _ActivityState extends ConsumerState<ForegroundDownloadActivity> {
   AppLifecycleListener? _lifecycle;
-  Timer? _timer;
   bool _foreground = true;
   @override
   void initState() {
@@ -30,25 +29,23 @@ class _ActivityState extends ConsumerState<ForegroundDownloadActivity> {
         ref
             .read(subsonicControllerProvider.notifier)
             .setDownloadForeground(_foreground);
-        if (_foreground) _tick();
+        if (_foreground) _resumeDownloads();
       },
     );
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _tick());
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _tick();
+      if (mounted) _resumeDownloads();
     });
   }
 
-  void _tick() {
+  void _resumeDownloads() {
     if (!mounted || !_foreground) return;
     final controller = ref.read(subsonicControllerProvider.notifier);
     controller.setDownloadForeground(true);
-    unawaited(controller.automaticDownloadTick().catchError((Object _) {}));
+    unawaited(controller.pumpDownloads().catchError((Object _) {}));
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _lifecycle?.dispose();
     super.dispose();
   }
@@ -64,7 +61,7 @@ class _ActivityState extends ConsumerState<ForegroundDownloadActivity> {
             (next.hasValue && previous != null && previous.hasValue)) {
           ref.read(subsonicDownloadQueueProvider).value?.interrupt();
         }
-        _tick();
+        _resumeDownloads();
       });
     }
     return widget.child;

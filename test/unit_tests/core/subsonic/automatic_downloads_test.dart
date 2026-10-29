@@ -46,7 +46,6 @@ void main() {
   var requested = <String>[];
   var scans = 0;
   var allowed = true;
-  var clock = DateTime.utc(2026, 10, 29);
   setUp(() async {
     root = await Directory.systemTemp.createTemp('automatic-downloads-');
     Hive.init(root.path);
@@ -59,7 +58,6 @@ void main() {
     requested = [];
     scans = 0;
     allowed = true;
-    clock = DateTime.utc(2026, 10, 29);
     container = ProviderContainer(
       overrides: [
         subsonicRepositoryProvider.overrideWith(
@@ -68,7 +66,6 @@ void main() {
         subsonicDownloadsProvider.overrideWith((_) async => store),
         subsonicCredentialsProvider.overrideWithValue(_Credentials()),
         downloadNetworkAllowedProvider.overrideWithValue((_) async => allowed),
-        downloadClockProvider.overrideWithValue(() => clock),
         subsonicClientFactoryProvider.overrideWithValue(
           (config, password) => SubsonicClient(
             config,
@@ -129,66 +126,68 @@ void main() {
   });
 
   test(
-    'entire-library setting scans on schedule and adds newly published songs',
+    'entire-library choice queues now and new songs only after a scan',
     () async {
       await store.setQuality(DownloadQuality.high);
+      final before = scans;
       await controller.setAutomaticDownloads(true);
-      await controller.automaticDownloadTick();
       await controller.pumpDownloads();
       expect(requested, ['a']);
-      final initialScans = scans;
-      await controller.automaticDownloadTick();
-      expect(scans, initialScans);
+      expect(scans, before);
       tracks.add('b');
-      clock = clock.add(const Duration(minutes: 6));
-      await controller.automaticDownloadTick();
       await controller.pumpDownloads();
-      expect(scans, initialScans + 1);
+      expect(requested, ['a']);
+      expect(scans, before);
+      await controller.refresh();
+      await controller.pumpDownloads();
       expect(requested, ['a', 'b']);
       final id = container.read(subsonicControllerProvider).value!.config!.id;
       expect((box.get('download:subsonic:$id:b') as Map)['quality'], 'high');
+      await controller.refresh();
+      await controller.pumpDownloads();
+      expect(requested, ['a', 'b']);
       await queue.setPaused(id, true);
       tracks.add('c');
-      clock = clock.add(const Duration(minutes: 6));
-      await controller.automaticDownloadTick();
-      expect(scans, initialScans + 1);
+      await controller.refresh();
+      await controller.pumpDownloads();
+      expect(requested, ['a', 'b']);
+      expect(queue.jobs(id).single.song.remoteSongId, 'c');
       await queue.setPaused(id, false);
       controller.setDownloadForeground(false);
-      await controller.automaticDownloadTick();
-      expect(scans, initialScans + 1);
+      await controller.pumpDownloads();
+      expect(requested, ['a', 'b']);
       controller.setDownloadForeground(true);
-      await controller.automaticDownloadTick();
       await controller.pumpDownloads();
       expect(requested, ['a', 'b', 'c']);
       await controller.setAutomaticDownloads(false);
       tracks.add('d');
-      clock = clock.add(const Duration(minutes: 6));
-      await controller.automaticDownloadTick();
-      expect(scans, initialScans + 2);
+      await controller.refresh();
+      await controller.pumpDownloads();
       expect(requested, ['a', 'b', 'c']);
     },
   );
 
   test(
-    'Wi-Fi policy defers automatic scan and resumes pending jobs on reconnect',
+    'network reconnect resumes jobs without scanning for new music',
     () async {
       allowed = false;
       final before = scans;
       await controller.setAutomaticDownloads(true);
-      await controller.automaticDownloadTick();
       await controller.pumpDownloads();
       expect(scans, before);
       expect(requested, isEmpty);
       expect(queue.waitingForNetwork, isTrue);
       tracks.add('b');
       allowed = true;
-      await controller.automaticDownloadTick();
+      await controller.pumpDownloads();
+      expect(scans, before);
+      expect(requested, ['a']);
+      await controller.refresh();
       await controller.pumpDownloads();
       expect(requested, ['a', 'b']);
       final a = container.read(subsonicControllerProvider).value!.songs.first;
       await queue.remove(a);
-      clock = clock.add(const Duration(minutes: 6));
-      await controller.automaticDownloadTick();
+      await controller.refresh();
       await controller.pumpDownloads();
       expect(requested, ['a', 'b']);
       expect(await store.resolve(a), isNull);
@@ -202,7 +201,6 @@ void main() {
     'removing the account clears automatic choices, audio and persistent queue',
     () async {
       await controller.setAutomaticDownloads(true);
-      await controller.automaticDownloadTick();
       await controller.pumpDownloads();
       final id = container.read(subsonicControllerProvider).value!.config!.id;
       await controller.remove();
