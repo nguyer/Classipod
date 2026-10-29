@@ -8,12 +8,52 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 Future<void> showDownloadDialog(BuildContext context, MusicMetadata song) =>
     showCupertinoDialog<void>(
       context: context,
-      builder: (_) => _DownloadDialog(song: song),
+      builder: (_) => _DownloadDialog(songs: [song], single: true),
     );
 
+Future<void> showCollectionDownloadDialog(
+  BuildContext context,
+  List<MusicMetadata> songs,
+) => showCupertinoDialog<void>(
+  context: context,
+  builder: (_) =>
+      _DownloadDialog(songs: songs.where((song) => song.isSubsonic).toList()),
+);
+
+String downloadQualityLabel(BuildContext context, DownloadQuality quality) =>
+    switch (quality) {
+      DownloadQuality.original => context.localization.offlineAudioOriginal,
+      DownloadQuality.high => context.localization.offlineAudioHigh,
+      DownloadQuality.medium => context.localization.offlineAudioMedium,
+      DownloadQuality.low => context.localization.offlineAudioLow,
+    };
+
+Future<DownloadQuality?> chooseDownloadQuality(
+  BuildContext context,
+  DownloadQuality current,
+) => showCupertinoDialog<DownloadQuality>(
+  context: context,
+  builder: (context) => CupertinoAlertDialog(
+    title: Text(context.localization.downloadQuality),
+    actions: [
+      for (final quality in DownloadQuality.values)
+        CupertinoDialogAction(
+          isDefaultAction: quality == current,
+          onPressed: () => Navigator.of(context).pop(quality),
+          child: Text(downloadQualityLabel(context, quality)),
+        ),
+      CupertinoDialogAction(
+        onPressed: () => Navigator.of(context).pop(),
+        child: Text(context.localization.cancelText),
+      ),
+    ],
+  ),
+);
+
 class _DownloadDialog extends ConsumerStatefulWidget {
-  const _DownloadDialog({required this.song});
-  final MusicMetadata song;
+  const _DownloadDialog({required this.songs, this.single = false});
+  final List<MusicMetadata> songs;
+  final bool single;
   @override
   ConsumerState<_DownloadDialog> createState() => _DownloadDialogState();
 }
@@ -42,6 +82,12 @@ class _DownloadDialogState extends ConsumerState<_DownloadDialog> {
   @override
   Widget build(BuildContext context) {
     final store = ref.watch(subsonicDownloadsProvider);
+    final serverId = ref.watch(subsonicControllerProvider).value?.config?.id;
+    final eligible = widget.single
+        ? widget.songs
+        : widget.songs
+              .where((song) => song.isSubsonic && song.serverId == serverId)
+              .toList();
     return CupertinoAlertDialog(
       title: Text(context.localization.offlineAudioTitle),
       content: Text(
@@ -50,35 +96,41 @@ class _DownloadDialogState extends ConsumerState<_DownloadDialog> {
             : _message ??
                   (store.hasError
                       ? context.localization.offlineAudioStorageError
-                      : context.localization.offlineAudioPrompt),
+                      : widget.single
+                      ? context.localization.offlineAudioPrompt
+                      : context.localization.downloadSelectionPrompt(
+                          eligible.length,
+                        )),
       ),
       actions: [
         for (final quality in DownloadQuality.values)
           CupertinoDialogAction(
             isDefaultAction: store.value?.quality == quality,
-            onPressed: _busy || !store.hasValue
+            onPressed: _busy || !store.hasValue || eligible.isEmpty
                 ? null
                 : () => _run(
-                    () => ref
-                        .read(subsonicControllerProvider.notifier)
-                        .download(widget.song, quality),
+                    () => widget.single
+                        ? ref
+                              .read(subsonicControllerProvider.notifier)
+                              .download(widget.songs.single, quality)
+                        : ref
+                              .read(subsonicControllerProvider.notifier)
+                              .enqueueDownloads(eligible, quality),
                   ),
-            child: Text(switch (quality) {
-              DownloadQuality.original =>
-                context.localization.offlineAudioOriginal,
-              DownloadQuality.high => context.localization.offlineAudioHigh,
-              DownloadQuality.medium => context.localization.offlineAudioMedium,
-              DownloadQuality.low => context.localization.offlineAudioLow,
-            }),
+            child: Text(downloadQualityLabel(context, quality)),
           ),
-        CupertinoDialogAction(
-          onPressed: _busy || !store.hasValue
-              ? null
-              : () => _run(() async {
-                  await store.value!.remove(widget.song);
-                }),
-          child: Text(context.localization.offlineAudioRemove),
-        ),
+        if (widget.single)
+          CupertinoDialogAction(
+            onPressed: _busy || !store.hasValue
+                ? null
+                : () => _run(() async {
+                    final queue = await ref.read(
+                      subsonicDownloadQueueProvider.future,
+                    );
+                    await queue.remove(widget.songs.single);
+                  }),
+            child: Text(context.localization.offlineAudioRemove),
+          ),
         CupertinoDialogAction(
           onPressed: _busy ? null : () => Navigator.of(context).pop(),
           child: Text(context.localization.cancelText),

@@ -610,7 +610,13 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 45));
     expect(handler.recovering, isTrue);
     player.loadError = null;
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    // Wait for the recovery event rather than racing a wall-clock sleep
+    // against exponential retry backoff on busy build/test machines.
+    await handler.playbackState
+        .firstWhere(
+          (state) => state.processingState == AudioProcessingState.ready,
+        )
+        .timeout(const Duration(seconds: 2));
     expect(handler.recovering, isFalse);
     expect(player.position, const Duration(seconds: 42));
     expect(player.playing, isTrue);

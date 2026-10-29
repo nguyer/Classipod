@@ -10,12 +10,14 @@ class PlaylistListTile extends StatelessWidget {
   final PlaylistModel playlistModel;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const PlaylistListTile({
     super.key,
     required this.playlistModel,
     required this.isSelected,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -31,6 +33,7 @@ class PlaylistListTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: SizedBox(
         height: 54,
         width: double.infinity,

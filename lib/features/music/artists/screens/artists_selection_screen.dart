@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:classipod/core/extensions/build_context_extensions.dart';
+import 'package:classipod/core/models/music_metadata.dart';
 import 'package:classipod/core/navigation/routes.dart';
+import 'package:classipod/core/providers/filtered_audio_files_provider.dart';
 import 'package:classipod/core/widgets/display_list_tile.dart';
 import 'package:classipod/core/widgets/empty_state_widget.dart';
 import 'package:classipod/core/widgets/fast_scroll_indicator.dart';
 import 'package:classipod/features/custom_screen_elements/custom_screen.dart';
 import 'package:classipod/features/music/artists/providers/artist_names_provider.dart';
+import 'package:classipod/features/settings/widgets/download_dialog.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -38,6 +42,25 @@ class _ArtistsSelectionScreenState extends ConsumerState<ArtistsSelectionScreen>
 
   @override
   void onSelectPressed() => _selectArtist(selectedDisplayItem);
+
+  @override
+  Future<void> onSelectLongPress() => _downloadArtist(selectedDisplayItem);
+
+  Future<void> _downloadArtist(int index) async {
+    if (kIsWeb || index == 0 || index > displayItems.length) return;
+    setState(() => selectedDisplayItem = index);
+    final artist = displayItems[index - 1];
+    final songs =
+        (ref.read(filteredAudioFilesProvider).value ?? const <MusicMetadata>[])
+            .where(
+              (song) =>
+                  song.isSubsonic &&
+                  ((song.trackArtistNames?.contains(artist) ?? false) ||
+                      (song.albumArtistNames?.contains(artist) ?? false)),
+            )
+            .toList();
+    if (songs.isNotEmpty) await showCollectionDownloadDialog(context, songs);
+  }
 
   void _selectArtist(int index) {
     setState(() => selectedDisplayItem = index);
@@ -110,6 +133,7 @@ class _ArtistsSelectionScreenState extends ConsumerState<ArtistsSelectionScreen>
                       text: displayItems[index - 1],
                       isSelected: selectedDisplayItem == index,
                       onTap: () => _selectArtist(index),
+                      onLongPress: () => _downloadArtist(index),
                     );
                   },
                 ),

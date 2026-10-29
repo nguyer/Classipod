@@ -8,8 +8,10 @@ import 'package:classipod/core/providers/shared_preferences_with_cache_provider.
 import 'package:classipod/core/subsonic/download_quality.dart';
 import 'package:classipod/core/subsonic/subsonic_client.dart';
 import 'package:classipod/core/subsonic/subsonic_credentials.dart';
+import 'package:classipod/core/subsonic/subsonic_download_queue.dart';
 import 'package:classipod/core/subsonic/subsonic_downloads.dart';
 import 'package:classipod/core/subsonic/subsonic_repository.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
@@ -26,6 +28,48 @@ final subsonicDownloadsProvider = FutureProvider<SubsonicDownloads>((
     Directory('${root.path}/subsonic-audio-v1'),
   );
 });
+
+final subsonicDownloadQueueProvider = FutureProvider<SubsonicDownloadQueue>((
+  ref,
+) async {
+  final downloads = await ref.watch(subsonicDownloadsProvider.future);
+  final queue = SubsonicDownloadQueue(downloads);
+  ref.onDispose(() => unawaited(queue.close()));
+  return queue;
+});
+
+final downloadQueueChangesProvider = StreamProvider<void>((ref) async* {
+  final queue = await ref.watch(subsonicDownloadQueueProvider.future);
+  yield null;
+  yield* queue.changes;
+});
+
+final downloadRecordsChangesProvider = StreamProvider<void>((ref) async* {
+  final downloads = await ref.watch(subsonicDownloadsProvider.future);
+  yield null;
+  yield* downloads.box.watch().map((_) {});
+});
+
+final downloadClockProvider = Provider<DateTime Function()>(
+  (_) => DateTime.now,
+);
+
+final downloadNetworkAllowedProvider = Provider<Future<bool> Function(bool)>(
+  (_) => (wifiOnly) async {
+    try {
+      final network = await Connectivity().checkConnectivity();
+      return wifiOnly
+          ? network.contains(ConnectivityResult.wifi)
+          : network.any((value) => value != ConnectivityResult.none);
+    } catch (_) {
+      return false;
+    }
+  },
+);
+
+final downloadConnectivityProvider = StreamProvider<List<ConnectivityResult>>(
+  (_) => Connectivity().onConnectivityChanged,
+);
 
 final subsonicCredentialsProvider = Provider<SubsonicCredentialStore>(
   (_) => PlatformSubsonicCredentialStore(),
@@ -71,6 +115,10 @@ final subsonicControllerProvider =
 class SubsonicController extends AsyncNotifier<SubsonicState> {
   SubsonicClient? _client;
   SubsonicDownloads? _downloads;
+  SubsonicDownloadQueue? _queue;
+  bool _foreground = false;
+  Future<void>? _automaticTick;
+  DateTime? _lastAutomaticScan;
   int _generation = 0;
   static const _preferenceKey = 'subsonicConfig';
 
@@ -78,6 +126,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
   Future<SubsonicState> build() async {
     ref.onDispose(() {
       _generation++;
+      _queue?.interrupt();
       _downloads?.cancel();
       _client?.close();
     });
@@ -117,10 +166,116 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
     if (client == null || !_current.enabled) {
       throw const SubsonicException('signin');
     }
-    final downloads = await ref.read(subsonicDownloadsProvider.future);
-    _downloads = downloads;
-    await downloads.setQuality(quality);
-    await downloads.download(client, song, quality: quality);
+    await enqueueDownloads([song], quality, replace: true);
+  }
+
+  Future<SubsonicDownloadQueue> _downloadQueue() async {
+    final queue = await ref.read(subsonicDownloadQueueProvider.future);
+    _queue = queue;
+    _downloads = queue.downloads;
+    queue.setForeground(_foreground);
+    return queue;
+  }
+
+  Future<void> enqueueDownloads(
+    Iterable<MusicMetadata> songs,
+    DownloadQuality quality, {
+    bool replace = false,
+  }) async {
+    final config = _current.config;
+    final generation = _generation;
+    if (config == null || !_current.enabled || _client == null) {
+      throw const SubsonicException('signin');
+    }
+    final queue = await _downloadQueue();
+    if (generation != _generation || _current.config?.id != config.id) {
+      throw const SubsonicException('cancelled');
+    }
+    await queue.downloads.setQuality(quality);
+    await queue.enqueue(songs, quality, serverId: config.id, replace: replace);
+    unawaited(pumpDownloads());
+  }
+
+  void setDownloadForeground(bool value) {
+    _foreground = value;
+    _queue?.setForeground(value);
+  }
+
+  Future<void> pumpDownloads() async {
+    if (kIsWeb || !_foreground || !_current.enabled || _client == null) return;
+    final client = _client!;
+    try {
+      final queue = await _downloadQueue();
+      if (_foreground && _client == client) {
+        await queue.run(
+          client,
+          networkAllowed: ref.read(downloadNetworkAllowedProvider),
+        );
+      }
+    } catch (_) {
+      // Pending jobs remain durable and can be retried from Downloads.
+    }
+  }
+
+  Future<void> automaticDownloadTick() => _automaticTick ??=
+      _automaticDownloadTick().whenComplete(() => _automaticTick = null);
+
+  Future<void> _automaticDownloadTick() async {
+    if (kIsWeb || !_foreground || !_current.enabled || _client == null) return;
+    final generation = _generation;
+    final queue = await _downloadQueue();
+    if (!_foreground || generation != _generation || _current.config == null) {
+      return;
+    }
+    final id = _current.config!.id;
+    final automatic = queue.autoDownload(id) && !queue.paused(id);
+    if (automatic &&
+        await ref.read(downloadNetworkAllowedProvider)(queue.wifiOnly(id)) &&
+        generation == _generation &&
+        !_current.scanning &&
+        (_lastAutomaticScan == null ||
+            ref.read(downloadClockProvider)().difference(_lastAutomaticScan!) >=
+                const Duration(minutes: 5))) {
+      _lastAutomaticScan = ref.read(downloadClockProvider)();
+      await queue.retry(id, automaticOnly: true);
+      await refresh();
+    }
+    if (_foreground) unawaited(pumpDownloads());
+  }
+
+  Future<void> setAutomaticDownloads(bool enabled) async {
+    final id = _current.config?.id;
+    final generation = _generation;
+    if (id == null || (enabled && (!_current.enabled || _client == null))) {
+      throw const SubsonicException('signin');
+    }
+    final queue = await _downloadQueue();
+    if (generation != _generation || _current.config?.id != id) {
+      throw const SubsonicException('cancelled');
+    }
+    await queue.setAutoDownload(id, enabled);
+    if (enabled) {
+      await queue.downloads.box.deleteAll(
+        queue.downloads.box.keys
+            .where(
+              (key) =>
+                  key.toString().startsWith('downloadExcluded:subsonic:$id:'),
+            )
+            .toList(),
+      );
+      await queue.setPaused(id, false);
+      await queue.enqueue(
+        _current.songs,
+        queue.downloads.quality,
+        serverId: id,
+        automatic: true,
+      );
+      _lastAutomaticScan = null;
+      unawaited(automaticDownloadTick().catchError((Object _) {}));
+    } else {
+      await queue.stopAutomatic(id);
+      unawaited(pumpDownloads());
+    }
   }
 
   Future<void> connect(
@@ -158,6 +313,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
       throw const SubsonicException('storage');
     }
     _generation++;
+    _queue?.interrupt();
     _downloads?.cancel();
     repository.cancel();
     _client?.close();
@@ -206,6 +362,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
     final config = old.config!.withEnabled(enabled);
     await _save(config);
     _generation++;
+    _queue?.interrupt();
     _downloads?.cancel();
     repository.cancel();
     _client?.close();
@@ -237,17 +394,25 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
 
   Future<void> _removeDownloads(String serverId) async {
     if (kIsWeb) return;
-    if (_downloads != null) {
-      await _downloads!.removeServer(serverId);
-      return;
-    }
     final repository = await ref.read(subsonicRepositoryProvider.future);
-    if (repository.box.keys.any(
+    if (_queue != null) {
+      await _queue!.clear(serverId);
+    } else if (repository.box.keys.any(
       (key) => key.toString().startsWith('download:subsonic:$serverId:'),
     )) {
       await (await ref.read(subsonicDownloadsProvider.future))
           .removeServer(serverId);
     }
+    await repository.box.deleteAll([
+      'downloadAll:$serverId',
+      'downloadWifi:$serverId',
+      'downloadPaused:$serverId',
+      ...repository.box.keys.where(
+        (key) =>
+            key.toString().startsWith('downloadJob:subsonic:$serverId:') ||
+            key.toString().startsWith('downloadExcluded:subsonic:$serverId:'),
+      ),
+    ]);
   }
 
   Future<void> refresh({bool clearArtwork = false}) async {
@@ -288,6 +453,25 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
       state = AsyncData(
         SubsonicState(config: old.config, songs: songs, signedIn: true),
       );
+      if (!kIsWeb &&
+          (repository.box.get('downloadAll:${client.config.id}') == true ||
+              repository.box.keys.any(
+                (key) => key.toString().startsWith(
+                  'downloadJob:subsonic:${client.config.id}:',
+                ),
+              ))) {
+        final queue = await _downloadQueue();
+        if (generation != _generation) return;
+        if (queue.autoDownload(client.config.id)) {
+          await queue.enqueue(
+            songs,
+            queue.downloads.quality,
+            serverId: client.config.id,
+            automatic: true,
+          );
+        }
+        unawaited(pumpDownloads());
+      }
     } catch (error) {
       if (generation != _generation || !ref.mounted) return;
       state = AsyncData(

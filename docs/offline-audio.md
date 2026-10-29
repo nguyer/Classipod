@@ -1,81 +1,105 @@
-# Offline Subsonic / Navidrome audio
+# Subsonic / Navidrome downloads
 
-## Building a phone test APK on Windows
+## Download songs and collections
 
-Run `./scripts/build_android_test.ps1` with Flutter on PATH, or pass
-`-FlutterExecutable` with the path to `flutter.bat`. This generates Android
-plugin registration before building the `dev` flavor using the normal app
-entry point. It temporarily disables desktop targets only for that process,
-so desktop symlink requirements cannot interrupt Android dependency setup.
+- Hold Select on a server song and choose **Download**, then choose a quality.
+- Hold Select on an album and choose **Download** to queue the full album.
+- Hold an artist name in Artists (touch long press or hold Select) to download
+  all server songs by that track or album artist. The artist's All Songs album
+  also offers Download from its album options.
+- Hold a playlist name to download every server song in that playlist. Holding
+  a playlist header action with Select also downloads the whole playlist.
+
+Mixed collections skip local phone files and songs from a different server
+account. Duplicate songs are queued once. Collections skip completed audio;
+explicitly downloading a single song replaces its previous download. The
+quality picker closes after the queue is saved, so you can continue using the
+app while transfers run. Monitor them in **Settings > Downloads**.
+
+## Manage downloads
+
+Settings > Downloads shows saved song count and storage use, pending/failed
+songs, the current transfer and byte progress. It includes:
+
+- Download quality for newly queued songs: Original/raw, High/320 kbps MP3,
+  Medium/192 kbps MP3, or Low/128 kbps MP3. Existing files and queued quality
+  choices are not silently changed when the default changes.
+- Wi-Fi only (on by default), or allow any active network including mobile data.
+- Download all music once, or Keep entire library offline.
+- Pause/resume, retry failures, clear the queue, remove one download, or remove
+  all downloaded audio. Destructive bulk actions require confirmation.
+
+Completed audio is never deleted from the server, and playlist entries remain
+unchanged. Removing an individual download while automatic library downloads
+are enabled excludes it from future automatic downloads. Download it explicitly
+again, use Download all music, or re-enable Keep entire library offline to
+include it again. Clearing the queue or removing all audio turns automatic
+library downloads off, preventing immediate redownloads.
+
+## Automatically keep the whole library offline
+
+Enable **Keep entire library offline** in Settings > Downloads and confirm the
+song count and quality. The app queues missing songs from the full server
+catalog, refreshes the catalog at most once every five minutes while open,
+then queues newly added songs. Opening/resuming the app also checks when a
+refresh is due. A manual server refresh likewise picks up new songs for this
+setting. Previously completed music is skipped, and server deletions do not
+automatically remove saved audio.
+
+This is explicitly foreground-only: transfers pause when the app leaves the
+foreground or the phone locks. No Android background worker or alarm is
+registered. Reopening the app resumes the persistent queue; an interrupted
+song restarts its transfer rather than resuming a partial byte range.
+Automatic checks and transfers honor the network policy and pause setting.
+Automatic failed jobs are retried on the next scheduled check; manual failed
+jobs can be retried from Downloads. A full storage error pauses the queue so
+you can free space before resuming.
+
+The queue survives process termination, deduplicates by account and song ID,
+preserves collection/playlist selection order, and transfers one song at a
+time. Paused state, quality, network preference, automatic-library selection,
+and per-song automatic exclusions persist. Removing or replacing an account
+clears that account's queue, preferences and downloaded files.
+
+## Storage and quality
+
+Requests use `stream.view`, `format=raw` for Original, and `format=mp3` with
+`maxBitRate=320`, `192`, or `128` for MP3 choices. The server must have MP3
+transcoding configured. Bitrate is a requested maximum, not a guarantee of a
+measured output bitrate. See the [OpenSubsonic stream API](https://opensubsonic.netlify.app/docs/endpoints/stream/).
+
+Audio streams into private application support storage. Temporary files become
+playable only after a nonempty transfer completes and matches Content-Length
+when given. API errors are rejected; failed replacements preserve the previous
+file. Metadata and queue entries in Hive contain identities and relative file
+names, never passwords or authenticated stream URLs. Local playback validates
+saved files first and falls back to streaming if they are missing or changed.
+Original formats still require a decoder supported by the phone.
+
+## Building and testing on Windows
+
+Run `./scripts/build_android_test.ps1` with Flutter on PATH, or supply
+`-FlutterExecutable` with the path to flutter.bat. The script temporarily
+disables desktop targets only for that process, completes Android plugin
+registration, and builds the dev flavor with the normal app entry point.
 The APK is `build/app/outputs/flutter-apk/app-dev-debug.apk` and installs as
 Classipod Dev alongside the production app.
 
-Do not continue with `--no-pub` after `flutter pub get` fails: an APK without
-`GeneratedPluginRegistrant` can compile and pass signature verification but
-cannot initialize native storage or audio plugins. The Android pre-build task
-now rejects this condition. Verify the built app actually reaches its menu
-on an Android device or emulator before sharing it.
+Do not continue with --no-pub after dependency generation fails: an APK without
+GeneratedPluginRegistrant can compile but fail to start. The Android pre-build
+task rejects that condition. Verify startup on an emulator or phone before
+sharing an APK.
 
-## Downloading songs
-
-On Android, open a Subsonic song's options and select **Offline audio**.
-Choose Original (raw), High (320 kbps MP3), Medium (192 kbps MP3), or
-Low (128 kbps MP3). The last choice is saved as the default. Choose
-**Remove download** in the same dialog to free its storage.
-
-Keep the app open until the dialog closes. This milestone downloads one
-selected song at a time; it does not provide OS-managed background jobs,
-resumable transfers, bulk album downloads, or a download queue.
-
-## Quality and storage
-
-Requests use `stream.view`, `format=raw` for Original, and `format=mp3`
-with `maxBitRate=320`, `192`, or `128` for the MP3 choices. These are
-server transcoding requests, not client encodes: the server must have
-MP3 transcoding configured. Subsonic specifies a maximum bitrate, so a
-lower-bitrate source may remain below the selected limit. Stored quality
-describes the requested quality; it does not claim measured output bitrate.
-See the [OpenSubsonic stream API](https://opensubsonic.netlify.app/docs/endpoints/stream/).
-
-Audio is streamed into private application support storage, never buffered
-in full in memory. A temporary file becomes visible to playback only after
-the transfer completes, is nonempty, and matches Content-Length when given.
-Non-audio API errors are rejected. Failed replacements retain the previous
-download. Interrupted process termination can leave an unused file; partial
-files have no playable metadata and cannot be resolved as completed audio.
-
-The existing Hive box stores a separate record keyed by account identity
-and song identity: metadata, relative filename, byte count, requested quality,
-content type and completion timestamp. It stores no stream URL or password.
-Downloaded metadata survives catalog refreshes even if the server removes
-a song. Disabling the account hides its library; re-enabling restores access.
-Removing or replacing the configured account removes its downloads.
-Uninstalling the app removes its private audio.
-
-Playback verifies the saved file exists and has the expected size before
-using its file URI. A missing or changed file falls back to normal streaming.
-Offline playback needs the account enabled, but no successful server ping.
-Original formats still require support from the Android audio decoder.
+Tests cover the quality mapping, restart persistence, selection ordering,
+deduplication, account isolation, network and lifecycle gating, cancellation,
+failed jobs/retry, low-storage pausing, automatic additions after scheduled
+refreshes, exclusions/removal, and album/artist/playlist/settings UI actions.
 
 ## Future Sonos support
 
-`SubsonicDownloads` has no dependency on just_audio or speaker discovery.
-`SubsonicController.resolveUri(song, allowLocal: false)` explicitly bypasses
-phone-local files for a future remote playback output. The existing local
-queue/player boundary remains intact. Sonos discovery, device selection,
-transport commands and grouping/ungrouping should be a separate output
-service; a Sonos device must be able to reach the server URL itself.
-Do not persist authenticated URLs or send `file:` URIs to remote speakers.
-
-## Verification
-
-Unit tests cover each quality request, persistence across Hive reopen,
-metadata recovery, account isolation, replacement failures, HTTP/API errors,
-empty audio, stream errors, cancellation, duplicate requests, cache-first
-playback without credentials, missing files and remote-output cache bypass.
-
-Android device smoke test: download each quality from a server with MP3
-transcoding enabled, relaunch in airplane mode, play and seek the saved
-track, remove it, then restore networking and confirm streaming fallback.
-Also test storage exhaustion and switching/removing accounts during a
-transfer. Web keeps streaming and does not expose download controls.
+The download queue and storage service have no dependency on speaker discovery
+or just_audio. `SubsonicController.resolveUri(song, allowLocal: false)` bypasses
+phone-local files for remote outputs. Discovery, transport and grouping remain
+separate future output services; a Sonos speaker must be able to reach the
+server URI itself. Never send file: URIs or persist authenticated URLs for
+remote speakers.

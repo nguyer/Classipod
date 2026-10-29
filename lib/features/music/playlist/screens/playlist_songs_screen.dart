@@ -14,8 +14,10 @@ import 'package:classipod/features/music/playlist/providers/playlists_provider.d
 import 'package:classipod/features/music/playlist/widgets/playlist_option_list_tile.dart';
 import 'package:classipod/features/music/playlist/widgets/playlist_song_list_tile.dart';
 import 'package:classipod/features/now_playing/provider/now_playing_details_provider.dart';
+import 'package:classipod/features/settings/widgets/download_dialog.dart';
 import 'package:classipod/features/settings/widgets/subsonic_dialog.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -147,6 +149,9 @@ class _PlaylistsSongsScreenState extends ConsumerState<PlaylistSongsScreen>
     if (displayItems.isEmpty) return;
     setState(() => selectedDisplayItem = index);
     if (index < 2) {
+      if (!kIsWeb && displayItems.any((song) => song.isSubsonic)) {
+        await showCollectionDownloadDialog(context, displayItems);
+      }
       return;
     } else {
       final result = await context.pushNamed(

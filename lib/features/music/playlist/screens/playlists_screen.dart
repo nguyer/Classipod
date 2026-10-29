@@ -3,7 +3,9 @@ import 'package:classipod/features/custom_screen_elements/custom_screen.dart';
 import 'package:classipod/features/music/playlist/models/playlist_model.dart';
 import 'package:classipod/features/music/playlist/providers/playlists_provider.dart';
 import 'package:classipod/features/music/playlist/widgets/playlist_list_tile.dart';
+import 'package:classipod/features/settings/widgets/download_dialog.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -28,6 +30,18 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen>
   @override
   Future<void> onSelectPressed() =>
       _navigateToPlaylistSongsScreen(selectedDisplayItem);
+
+  @override
+  Future<void> onSelectLongPress() => _downloadPlaylist(selectedDisplayItem);
+
+  Future<void> _downloadPlaylist(int index) async {
+    if (kIsWeb || index >= displayItems.length) return;
+    setState(() => selectedDisplayItem = index);
+    final songs = displayItems[index].songs;
+    if (songs.any((song) => song.isSubsonic)) {
+      await showCollectionDownloadDialog(context, songs);
+    }
+  }
 
   Future<void> _navigateToPlaylistSongsScreen(int displayIndex) async {
     setState(() => selectedDisplayItem = displayIndex);
@@ -57,6 +71,7 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen>
                   playlistModel: displayItems[index],
                   isSelected: selectedDisplayItem == index,
                   onTap: () async => _navigateToPlaylistSongsScreen(index),
+                  onLongPress: () => _downloadPlaylist(index),
                 ),
               ),
             ),

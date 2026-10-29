@@ -67,11 +67,17 @@ class SubsonicDownloads {
     SubsonicClient client,
     MusicMetadata song, {
     DownloadQuality? quality,
+    void Function(int received, int? total)? onProgress,
   }) {
     if (_active.containsKey(song.identity)) {
       return Future.error(const SubsonicException('busy'));
     }
-    final task = _download(client, song, quality: quality);
+    final task = _download(
+      client,
+      song,
+      quality: quality,
+      onProgress: onProgress,
+    );
     _active[song.identity] = task;
     return task.whenComplete(() => _active.remove(song.identity));
   }
@@ -80,6 +86,7 @@ class SubsonicDownloads {
     SubsonicClient client,
     MusicMetadata song, {
     DownloadQuality? quality,
+    void Function(int received, int? total)? onProgress,
   }) async {
     if (!song.isSubsonic || song.serverId != client.config.id) {
       throw const SubsonicException('unavailable');
@@ -104,11 +111,17 @@ class SubsonicDownloads {
         selected.parameters,
       );
       final sink = await partial.open(mode: FileMode.write);
+      var received = 0;
       try {
         await for (final chunk in response.stream.timeout(
           const Duration(seconds: 30),
         )) {
+          if (generation != _generation) {
+            throw const SubsonicException('cancelled');
+          }
           await sink.writeFrom(chunk);
+          received += chunk.length;
+          onProgress?.call(received, response.contentLength);
         }
         await sink.flush();
       } finally {

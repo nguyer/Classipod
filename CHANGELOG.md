@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Rename song download actions to Download; add full-album, playlist, and
+  artist downloads with a persistent ordered queue.
+- Add Settings > Downloads with storage totals, transfer progress, quality,
+  Wi-Fi policy, pause/resume, retry, and removal controls.
+- Add Keep entire library offline to download missing and newly added server
+  music during foreground library checks. Pause on app background/lock and
+  storage exhaustion, retaining unfinished work for the next app session.
+
 - Prevent test APKs from being packaged without Android plugin registration.
   Add an Android-only Windows build script to avoid desktop symlink setup
   interrupting generation and leaving the app stuck on its startup spinner.
