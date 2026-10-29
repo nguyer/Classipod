@@ -1,4 +1,5 @@
 import 'package:classipod/core/extensions/build_context_extensions.dart';
+import 'package:classipod/core/sonos/sonos_controller.dart';
 import 'package:classipod/core/theme/ipod_typography.dart';
 import 'package:classipod/core/widgets/marquee_text.dart';
 import 'package:classipod/features/music/album/providers/album_details_provider.dart';
@@ -12,6 +13,7 @@ class NowPlayingWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final room = ref.watch(sonosControllerProvider).selected;
     final nowPlayingDetails = ref.watch(nowPlayingDetailsProvider);
     final artworkPath = ref.watch(
       songAlbumArtworkProvider(nowPlayingDetails.currentMetadata),
@@ -49,6 +51,13 @@ class NowPlayingWidget extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 10),
+                if (room != null)
+                  Text(
+                    'Sonos · ${room.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: IpodTypography.caption,
+                  ),
                 MarqueeText(
                   nowPlayingDetails.currentMetadata?.trackName ??
                       context.localization.unknownSong,

@@ -32,6 +32,8 @@ import 'package:just_audio/just_audio.dart';
 
 class _Handler extends BaseAudioHandler implements LibraryAudioHandler {
   @override
+  bool get usingRemote => false;
+  @override
   Duration get displayPosition => const Duration(seconds: 20);
 
   @override

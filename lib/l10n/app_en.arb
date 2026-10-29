@@ -773,5 +773,67 @@
   "downloadCompleted": "Downloaded",
   "downloadStorageFull": "Storage is full. Free space, then resume downloads.",
   "downloadedMusicTitle": "Downloaded music",
-  "downloadedMusicEmpty": "No downloaded or queued music"
+  "downloadedMusicEmpty": "No downloaded or queued music",
+  "sonosTitle": "Sonos / Audio output",
+  "sonosThisPhone": "This phone",
+  "sonosSelected": "Selected",
+  "sonosDiscover": "Find Sonos speakers",
+  "sonosSearching": "Looking for Sonos rooms…",
+  "sonosAddAddress": "Add speaker by IP address",
+  "sonosContinue": "Continue",
+  "sonosSelectPrompt": "Use {room} for playback? Your phone will pause. Playing a song will replace this Sonos group’s queue.",
+  "sonosPermissionError": "Allow local network access in Android settings to find and control Sonos.",
+  "sonosNotFound": "No Sonos rooms found. Use the same Wi-Fi, try again, or add a speaker by IP address.",
+  "sonosAddressError": "Enter a speaker’s IPv4 address, such as 192.168.1.100.",
+  "sonosConnectionError": "Cannot reach Sonos. Check Wi-Fi and try finding speakers again.",
+  "sonosServerTracksOnly": "Sonos can play server music only. Choose a Navidrome/Subsonic track.",
+  "sonosServerAddressError": "Your music server must have an address the Sonos speaker can reach, not localhost.",
+  "sonosQueueChanged": "The Sonos queue changed in another app. Select a song here to start a new queue.",
+  "sonosVolumeDown": "Volume down",
+  "sonosVolumeUp": "Volume up",
+  "sonosGroupRoom": "Group: {room}",
+  "sonosRemoveRoom": "Remove: {room}",
+  "sonosGroupPrompt": "Move {room} into the group playing in {target}? Its current playback will stop.",
+  "sonosUngroupPrompt": "Remove {room} from its Sonos group? Bonded speakers and Subs stay with their room.",
+  "sonosUngroupSelected": "Ungroup this room",
+  "sonosHelp": "About Sonos playback",
+  "sonosHelpText": "Use the same Wi-Fi as your Sonos S2 system. Choose a room, then play server music normally in Classipod. Sonos fetches music directly from Navidrome/Subsonic using 320 kbps MP3 transcoding, which must be enabled on your server. Phone-only files and offline downloads cannot be sent to Sonos. Starting playback replaces the selected group’s queue; switching back to This phone pauses Classipod’s Sonos playback. Volume affects the selected room. Stereo pairs, surrounds and Subs stay bonded.",
+  "@sonosSelectPrompt": {
+    "placeholders": {
+      "room": {
+        "type": "String"
+      }
+    }
+  },
+  "@sonosGroupRoom": {
+    "placeholders": {
+      "room": {
+        "type": "String"
+      }
+    }
+  },
+  "@sonosRemoveRoom": {
+    "placeholders": {
+      "room": {
+        "type": "String"
+      }
+    }
+  },
+  "@sonosGroupPrompt": {
+    "placeholders": {
+      "room": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "@sonosUngroupPrompt": {
+    "placeholders": {
+      "room": {
+        "type": "String"
+      }
+    }
+  }
 }
