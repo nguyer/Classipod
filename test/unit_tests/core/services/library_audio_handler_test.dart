@@ -12,6 +12,7 @@ import 'package:classipod/core/services/audio_player_service.dart';
 import 'package:classipod/core/services/playback/library_audio_handler.dart';
 import 'package:classipod/core/services/playback/logical_queue.dart';
 import 'package:classipod/core/services/playback/playback_session.dart';
+import 'package:classipod/core/services/playback/remote_audio_output.dart';
 import 'package:classipod/features/now_playing/models/now_playing_model.dart';
 import 'package:classipod/features/now_playing/provider/now_playing_details_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -140,6 +141,73 @@ MusicMetadata song(int index) => MusicMetadata(
 );
 
 Future<void> flushEvents() => Future.delayed(const Duration(milliseconds: 10));
+
+class TestRemoteOutput implements RemoteAudioOutput {
+  final events = StreamController<RemotePlaybackState>.broadcast();
+  @override
+  RemotePlaybackState current = const RemotePlaybackState();
+  final calls = <String>[];
+  @override
+  Stream<RemotePlaybackState> get changes => events.stream;
+  void update({int? index, Duration? position, bool? playing}) {
+    current = RemotePlaybackState(
+      index: index ?? current.index,
+      position: position ?? current.position,
+      playing: playing ?? current.playing,
+    );
+    events.add(current);
+  }
+
+  @override
+  void configure(List<MusicMetadata> songs, List<int> order, int index) {
+    update(index: index);
+  }
+
+  @override
+  Future<void> select(int index, {bool play = true}) async {
+    calls.add('select:$index');
+    update(index: index, playing: play, position: Duration.zero);
+  }
+
+  @override
+  Future<void> play() async {
+    calls.add('play');
+    update(playing: true);
+  }
+
+  @override
+  Future<void> pause() async {
+    calls.add('pause');
+    update(playing: false);
+  }
+
+  @override
+  Future<void> stop() async {
+    calls.add('stop');
+    update(playing: false);
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    calls.add('seek');
+    update(position: position);
+  }
+
+  @override
+  Future<void> setOrder(List<int> order) async {
+    calls.add('order');
+  }
+
+  @override
+  Future<void> setRepeat(LoopMode mode) async {
+    calls.add('repeat');
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    calls.add('volume');
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -1126,6 +1194,126 @@ void main() {
       expect(queue.next(), 0);
       queue.index = 0;
       expect(queue.previous(), 49999);
+    },
+  );
+  test('remote output handles transport and media buttons without loading phone audio', () async {
+    final output = TestRemoteOutput();
+    addTearDown(output.events.close);
+    final songs = [
+      for (var i = 0; i < 3; i++)
+        MusicMetadata(
+          songId: 's:$i',
+          serverId: 'server',
+          remoteSongId: '$i',
+          trackName: 'Track $i',
+        ),
+    ];
+    await handler.setSongs(songs, preload: false);
+    await handler.useRemoteOutput(output);
+    await handler.play();
+    await flushEvents();
+    expect(handler.isPlaying, isTrue);
+    expect(player.playing, isFalse);
+    await handler.skipToNext();
+    await handler.seek(const Duration(seconds: 42));
+    await handler.pause();
+    await flushEvents();
+    expect(
+      output.calls,
+      containsAllInOrder(['repeat', 'play', 'select:1', 'seek', 'pause']),
+    );
+    expect(handler.currentIndex, 1);
+    expect(handler.displayPosition.inSeconds, 42);
+    expect(handler.playbackState.value.playing, isFalse);
+    expect(player.loadedIds, isEmpty);
+    expect(handler.mediaItem.value!.title, 'Track 1');
+    output.update(
+      index: 2,
+      position: const Duration(seconds: 7),
+      playing: true,
+    );
+    await flushEvents();
+    expect(handler.currentIndex, 2);
+    expect(handler.playbackState.value.updatePosition.inSeconds, 7);
+    expect(handler.isPlaying, isTrue);
+    await handler.useRemoteOutput(null);
+    expect(handler.usingRemote, isFalse);
+    expect(player.playing, isFalse);
+    expect(output.calls.last, 'pause');
+  });
+
+  test(
+    'Now Playing follows remote playback rather than the paused phone player',
+    () async {
+      final output = TestRemoteOutput();
+      addTearDown(output.events.close);
+      final songs = [
+        MusicMetadata(songId: 'remote', serverId: 'server', remoteSongId: 'a'),
+      ];
+      final container = ProviderContainer(
+        overrides: [
+          audioPlayerProvider.overrideWithValue(player),
+          libraryAudioHandlerProvider.overrideWithValue(handler),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(nowPlayingDetailsProvider.notifier)
+          .setNewMetadataList(newMetadataList: songs);
+      await handler.setSongs(songs, preload: false);
+      await handler.useRemoteOutput(output);
+      await container.read(audioPlayerServiceProvider.future);
+      await container
+          .read(audioPlayerServiceProvider.notifier)
+          .togglePlayback();
+      await flushEvents();
+      expect(container.read(nowPlayingDetailsProvider).isPlaying, isTrue);
+      await container
+          .read(audioPlayerServiceProvider.notifier)
+          .togglePlayback();
+      await flushEvents();
+      expect(container.read(nowPlayingDetailsProvider).isPlaying, isFalse);
+      expect(output.calls, containsAllInOrder(['play', 'pause']));
+      expect(player.playing, isFalse);
+    },
+  );
+  test(
+    'a newly scanned library track can replace the retained remote queue',
+    () async {
+      final output = TestRemoteOutput();
+      addTearDown(output.events.close);
+      final container = ProviderContainer(
+        overrides: [
+          audioPlayerProvider.overrideWithValue(player),
+          libraryAudioHandlerProvider.overrideWithValue(handler),
+          filteredAudioFilesProvider.overrideWith(
+            (_) async => UnmodifiableListView([song(0), song(1)]),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await handler.setSongs([song(0)], preload: false);
+      container
+          .read(nowPlayingDetailsProvider.notifier)
+          .setNewMetadataList(newMetadataList: [song(0)]);
+      await handler.useRemoteOutput(output);
+      await container.read(audioPlayerServiceProvider.future);
+      await container.read(filteredAudioFilesProvider.future);
+      await flushEvents();
+      expect(
+        container.read(nowPlayingDetailsProvider).metadataList,
+        hasLength(1),
+      );
+      await container
+          .read(audioPlayerServiceProvider.notifier)
+          .playSongFromLibrary(song(1).identity);
+      await flushEvents();
+      expect(
+        container.read(nowPlayingDetailsProvider).metadataList,
+        hasLength(2),
+      );
+      expect(output.calls, contains('select:1'));
+      expect(handler.currentIndex, 1);
     },
   );
 }

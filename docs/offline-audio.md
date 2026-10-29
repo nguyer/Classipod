@@ -94,14 +94,13 @@ deduplication, account isolation, network and lifecycle gating, cancellation,
 failed jobs/retry, low-storage pausing, automatic additions after library
 refreshes, exclusions/removal, and album/artist/playlist/settings UI actions.
 
-## Future Sonos support
+## Sonos output
 
-The download queue and storage service have no dependency on speaker discovery
-or just_audio. `SubsonicController.resolveUri(song, allowLocal: false)` bypasses
-phone-local files for remote outputs. Discovery, transport and grouping remain
-separate future output services; a Sonos speaker must be able to reach the
-server URI itself. Never send file: URIs or persist authenticated URLs for
-remote speakers.
+Sonos playback uses the server stream even when a phone download is available.
+`SubsonicController.resolveUri(song, allowLocal: false)` prevents private file
+URIs from reaching speakers. Discovery, grouping and remote queue control live
+in separate Sonos services behind the playback output interface. See
+[Sonos playback](sonos-playback.md) for setup and limitations.
 
 ## APKs built by GitHub Actions
 
