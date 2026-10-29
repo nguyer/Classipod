@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Download Subsonic/Navidrome songs for offline playback in Original/raw or
+  High/320, Medium/192, and Low/128 kbps MP3 quality. Remember the last quality,
+  persist download metadata, prefer completed audio during local playback,
+  and remove downloads from song options.
+
 ## 2.1.0
 ### New features
 

@@ -94,7 +94,7 @@ void main() {
         pickLocations: () async => {'directory': music.path},
       );
       final result = await source.discover();
-      expect(result.songs.single.path, song.absolute.path);
+      expect(File(result.songs.single.path!).absolute.uri, song.absolute.uri);
       expect(result.songs.single.volume, music.absolute.uri.toString());
     },
   );

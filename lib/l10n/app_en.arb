@@ -722,5 +722,15 @@
   "coverFlowBigTitle": "Big",
   "@coverFlowBigTitle": {
     "description": "The Cover Flow appearance option with larger album artwork, showing a centered cover and one tilted cover on each side, up to three covers total"
-  }
+  },
+  "offlineAudioTitle": "Offline audio",
+  "offlineAudioPrompt": "Choose download quality. MP3 conversion requires server transcoding support.",
+  "offlineAudioSaving": "Saving audio… Keep the app open.",
+  "offlineAudioError": "Download failed. Check your connection, server transcoding settings and available storage, then retry.",
+  "offlineAudioStorageError": "Download storage is unavailable.",
+  "offlineAudioRemove": "Remove download",
+  "offlineAudioOriginal": "Original / raw",
+  "offlineAudioHigh": "High / 320 kbps MP3",
+  "offlineAudioMedium": "Medium / 192 kbps MP3",
+  "offlineAudioLow": "Low / 128 kbps MP3"
 }

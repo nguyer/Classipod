@@ -1,16 +1,31 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:classipod/core/models/music_metadata.dart';
 import 'package:classipod/core/providers/shared_preferences_with_cache_provider.dart';
+import 'package:classipod/core/subsonic/download_quality.dart';
 import 'package:classipod/core/subsonic/subsonic_client.dart';
 import 'package:classipod/core/subsonic/subsonic_credentials.dart';
+import 'package:classipod/core/subsonic/subsonic_downloads.dart';
 import 'package:classipod/core/subsonic/subsonic_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+
+final subsonicDownloadsProvider = FutureProvider<SubsonicDownloads>((
+  ref,
+) async {
+  final repository = await ref.watch(subsonicRepositoryProvider.future);
+  final root = await getApplicationSupportDirectory();
+  return SubsonicDownloads(
+    repository.box,
+    Directory('${root.path}/subsonic-audio-v1'),
+  );
+});
 
 final subsonicCredentialsProvider = Provider<SubsonicCredentialStore>(
   (_) => PlatformSubsonicCredentialStore(),
@@ -55,6 +70,7 @@ final subsonicControllerProvider =
 
 class SubsonicController extends AsyncNotifier<SubsonicState> {
   SubsonicClient? _client;
+  SubsonicDownloads? _downloads;
   int _generation = 0;
   static const _preferenceKey = 'subsonicConfig';
 
@@ -62,6 +78,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
   Future<SubsonicState> build() async {
     ref.onDispose(() {
       _generation++;
+      _downloads?.cancel();
       _client?.close();
     });
     final prefs = await ref.read(sharedPreferencesWithCacheProvider.future);
@@ -94,6 +111,17 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
   }
 
   SubsonicState get _current => state.value ?? const SubsonicState();
+
+  Future<void> download(MusicMetadata song, DownloadQuality quality) async {
+    final client = _client;
+    if (client == null || !_current.enabled) {
+      throw const SubsonicException('signin');
+    }
+    final downloads = await ref.read(subsonicDownloadsProvider.future);
+    _downloads = downloads;
+    await downloads.setQuality(quality);
+    await downloads.download(client, song, quality: quality);
+  }
 
   Future<void> connect(
     String url,
@@ -130,6 +158,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
       throw const SubsonicException('storage');
     }
     _generation++;
+    _downloads?.cancel();
     repository.cancel();
     _client?.close();
     _client = candidate;
@@ -142,6 +171,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
     );
     if (previous != null && previous.id != config.id) {
       try {
+        await _removeDownloads(previous.id);
         await store.delete(previous.id);
         await repository.remove(previous.id);
       } catch (_) {}
@@ -176,6 +206,7 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
     final config = old.config!.withEnabled(enabled);
     await _save(config);
     _generation++;
+    _downloads?.cancel();
     repository.cancel();
     _client?.close();
     _client = enabled
@@ -196,11 +227,27 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
     final config = _current.config;
     if (config == null) return;
     await setEnabled(false);
+    await _removeDownloads(config.id);
     await ref.read(subsonicCredentialsProvider).delete(config.id);
     await (await ref.read(subsonicRepositoryProvider.future)).remove(config.id);
     final prefs = await ref.read(sharedPreferencesWithCacheProvider.future);
     await prefs.remove(_preferenceKey);
     state = const AsyncData(SubsonicState());
+  }
+
+  Future<void> _removeDownloads(String serverId) async {
+    if (kIsWeb) return;
+    if (_downloads != null) {
+      await _downloads!.removeServer(serverId);
+      return;
+    }
+    final repository = await ref.read(subsonicRepositoryProvider.future);
+    if (repository.box.keys.any(
+      (key) => key.toString().startsWith('download:subsonic:$serverId:'),
+    )) {
+      await (await ref.read(subsonicDownloadsProvider.future))
+          .removeServer(serverId);
+    }
   }
 
   Future<void> refresh({bool clearArtwork = false}) async {
@@ -285,22 +332,43 @@ class SubsonicController extends AsyncNotifier<SubsonicState> {
     return repository.artwork(client, id);
   }
 
-  Future<UriAudioSource> resolve(MusicMetadata song) async {
-    if (!song.isSubsonic) return song.toAudioSource() as UriAudioSource;
-    if (!_current.enabled || _current.config?.id != song.serverId) {
+  /// Remote outputs must request network media: a Sonos device cannot read
+  /// this phone's private cache. Discovery and grouping remain output concerns.
+  Future<Uri> resolveUri(MusicMetadata song, {bool allowLocal = true}) async {
+    if (!song.isSubsonic ||
+        !_current.enabled ||
+        _current.config?.id != song.serverId) {
       throw const SubsonicException('unavailable');
+    }
+    if (allowLocal && !kIsWeb) {
+      final repository = await ref.read(subsonicRepositoryProvider.future);
+      if (repository.box.containsKey('download:${song.identity}')) {
+        final cached = await (await ref.read(subsonicDownloadsProvider.future))
+            .resolve(song);
+        if (cached != null) return cached;
+      }
     }
     final client = _client;
     if (client == null) throw const SubsonicException('signin');
+    return client.uri('stream', {'id': song.remoteSongId!});
+  }
+
+  Future<UriAudioSource> resolve(MusicMetadata song) async {
+    if (!song.isSubsonic) return song.toAudioSource() as UriAudioSource;
+    final uri = await resolveUri(song);
+    final client = _client;
     return AudioSource.uri(
-      client.uri('stream', {'id': song.remoteSongId!}),
+      uri,
       tag: MediaItem(
         id: song.identity,
         title: song.getTrackName,
         album: song.albumName,
         artist: song.getTrackArtistNames,
         duration: Duration(milliseconds: song.getTrackDuration),
-        artUri: song.remoteArtworkId == null
+        artUri:
+            uri.scheme == 'file' ||
+                song.remoteArtworkId == null ||
+                client == null
             ? null
             : client.uri('getCoverArt', {
                 'id': song.remoteArtworkId!,

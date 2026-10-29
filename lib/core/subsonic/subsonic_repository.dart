@@ -14,11 +14,24 @@ class SubsonicRepository {
 
   void cancel() => _generation++;
 
-  List<MusicMetadata> cached(String serverId) =>
-      (box.get('catalog:$serverId') as List? ?? [])
-          .cast<MusicMetadata>()
-          .map(_applyOverride)
-          .toList();
+  List<MusicMetadata> cached(String serverId) {
+    final songs = <String, MusicMetadata>{};
+    for (final key in box.keys.where(
+      (key) => key.toString().startsWith('download:'),
+    )) {
+      final record = box.get(key);
+      if (record is Map && record['song'] is MusicMetadata) {
+        final song = record['song'] as MusicMetadata;
+        if (song.serverId == serverId) songs[song.identity] = song;
+      }
+    }
+    for (final song
+        in (box.get('catalog:$serverId') as List? ?? [])
+            .cast<MusicMetadata>()) {
+      songs[song.identity] = song;
+    }
+    return songs.values.map(_applyOverride).toList();
+  }
 
   MusicMetadata _applyOverride(MusicMetadata song) {
     final saved = box.get('override:${song.identity}');
@@ -141,7 +154,7 @@ class SubsonicRepository {
     final result = songs.values.map(_applyOverride).toList();
     await box.put('catalog:${client.config.id}', result);
     check();
-    return result;
+    return cached(client.config.id);
   }
 
   static MusicMetadata parseSong(
