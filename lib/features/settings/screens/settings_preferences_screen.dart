@@ -35,6 +35,7 @@ enum _SettingsDisplayItems {
   showAppTutorial,
   librarySettings,
   downloads,
+  sonos,
   resetSettings,
   donate;
 
@@ -72,6 +73,8 @@ enum _SettingsDisplayItems {
         return context.localization.immersiveModeSettingTitle;
       case showAppTutorial:
         return context.localization.showAppTutorialSettingTitle;
+      case sonos:
+        return context.localization.sonosTitle;
       case downloads:
         return context.localization.downloadsTitle;
       case librarySettings:
@@ -99,7 +102,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   List<_SettingsDisplayItems> get displayItems => [
     for (final item in _SettingsDisplayItems.values)
-      if (!kIsWeb || item != _SettingsDisplayItems.downloads) item,
+      if (!kIsWeb ||
+          (item != _SettingsDisplayItems.downloads &&
+              item != _SettingsDisplayItems.sonos))
+        item,
   ];
 
   @override
@@ -109,6 +115,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Future<void> _settingAction(_SettingsDisplayItems settingItem) async {
     setState(() => selectedDisplayItem = displayItems.indexOf(settingItem));
     switch (settingItem) {
+      case _SettingsDisplayItems.sonos:
+        context.goNamed(Routes.sonos.name);
+        break;
       case _SettingsDisplayItems.downloads:
         context.goNamed(Routes.downloads.name);
         break;

@@ -19,7 +19,7 @@ class VolumeBar extends ConsumerStatefulWidget {
 }
 
 class _VolumeBarState extends ConsumerState<VolumeBar> {
-  late final StreamSubscription<double> _volumeSubscription;
+  StreamSubscription<dynamic>? _volumeSubscription;
   double _volumeLevel = 0;
 
   @override
@@ -29,7 +29,14 @@ class _VolumeBarState extends ConsumerState<VolumeBar> {
       final volumeMode = ref
           .read(settingsPreferencesControllerProvider)
           .volumeMode;
-      if (volumeMode == VolumeMode.app) {
+      if (!mounted) return;
+      final handler = ref.read(libraryAudioHandlerProvider);
+      if (handler.usingRemote) {
+        _volumeLevel = handler.remoteVolume;
+        _volumeSubscription = handler.playbackState.listen(
+          (_) => _updateVolume(handler.remoteVolume),
+        );
+      } else if (volumeMode == VolumeMode.app) {
         _volumeSubscription = ref
             .read(audioPlayerProvider)
             .volumeStream
@@ -43,6 +50,7 @@ class _VolumeBarState extends ConsumerState<VolumeBar> {
   }
 
   void _updateVolume(double volume) {
+    if (!mounted) return;
     setState(() {
       _volumeLevel = volume;
     });
@@ -50,7 +58,7 @@ class _VolumeBarState extends ConsumerState<VolumeBar> {
 
   @override
   void dispose() {
-    unawaited(_volumeSubscription.cancel());
+    unawaited(_volumeSubscription?.cancel());
     super.dispose();
   }
 

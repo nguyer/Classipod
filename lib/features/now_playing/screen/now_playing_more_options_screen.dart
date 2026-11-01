@@ -9,6 +9,7 @@ import 'package:classipod/features/music/playlist/providers/playlists_provider.d
 import 'package:classipod/features/music/songs/screens/song_edit_screen.dart';
 import 'package:classipod/features/now_playing/provider/now_playing_details_provider.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,6 +19,7 @@ enum _NowPlayingMoreOptions {
   browseArtist,
   editSong,
   sleepTimer,
+  sonos,
   cancel;
 
   String title(BuildContext context) {
@@ -30,6 +32,8 @@ enum _NowPlayingMoreOptions {
         return context.localization.browseArtist;
       case editSong:
         return context.localization.editSongOption;
+      case sonos:
+        return context.localization.sonosTitle;
       case sleepTimer:
         return context.localization.sleepTimerTitle;
       case cancel:
@@ -52,12 +56,13 @@ class _NowPlayingMoreOptionsScreenState
   String get routeName => Routes.nowPlayingMoreOptions.name;
 
   @override
-  List<_NowPlayingMoreOptions> get displayItems =>
-      _NowPlayingMoreOptions.values;
+  List<_NowPlayingMoreOptions> get displayItems => _NowPlayingMoreOptions.values
+      .where((item) => !kIsWeb || item != _NowPlayingMoreOptions.sonos)
+      .toList();
 
   @override
   Future<void> onSelectPressed() =>
-      _navigateToScreen(_NowPlayingMoreOptions.values[selectedDisplayItem]);
+      _navigateToScreen(displayItems[selectedDisplayItem]);
 
   @override
   void onMenuButtonPressed() => _closeScreen();
@@ -122,6 +127,9 @@ class _NowPlayingMoreOptionsScreenState
         if (mounted) {
           _closeScreen();
         }
+        break;
+      case _NowPlayingMoreOptions.sonos:
+        await context.pushNamed(Routes.sonos.name);
         break;
       case _NowPlayingMoreOptions.sleepTimer:
         await context.pushNamed(Routes.sleepTimer.name);

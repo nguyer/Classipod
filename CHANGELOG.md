@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Switch Sonos output immediately without a confirmation dialog. Request
+  original/raw server audio without a bitrate limit or transcoding, and
+  advertise each track's original media type to the speaker.
+
+- Add Sonos S2 room discovery, output selection, transport/seek controls,
+  per-room volume, grouping and ungrouping for Navidrome/Subsonic music.
+  Queue tracks on the group coordinator so playback continues without the
+  phone; preserve bonded stereo/surround/Sub configurations.
+- Request Android 17 local network permission when opening Sonos controls,
+  and hold the Wi-Fi multicast lock only during discovery.
+
 - Reuse a dedicated signing key from Actions secrets for test APKs, allowing
   later CI builds to install as updates without clearing app data. Validate
   the signing certificate and keep release signing separate.

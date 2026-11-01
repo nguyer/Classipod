@@ -41,6 +41,7 @@ import 'package:classipod/features/settings/screens/language_selection_screen.da
 import 'package:classipod/features/settings/screens/library_settings_screen.dart';
 import 'package:classipod/features/settings/screens/missing_tracks_screen.dart';
 import 'package:classipod/features/settings/screens/settings_preferences_screen.dart';
+import 'package:classipod/features/settings/screens/sonos_screen.dart';
 import 'package:classipod/features/sleep_timer/screens/sleep_timer_screen.dart';
 import 'package:classipod/features/status_bar/controller/status_bar_transition_observer.dart';
 import 'package:classipod/features/status_bar/widgets/device_screen_content.dart';
@@ -53,6 +54,7 @@ enum Routes {
   splash,
   menu,
   settings,
+  sonos,
   librarySettings,
   downloads,
   downloadedMusic,
@@ -97,6 +99,8 @@ enum Routes {
         return "";
       case menu:
         return context.localization.menuScreenTitle;
+      case sonos:
+        return context.localization.sonosTitle;
       case settings:
         return context.localization.settingsScreenTitle;
       case downloadedMusic:
@@ -268,6 +272,14 @@ final routerProvider = Provider(
                         parentNavigatorKey: menuNavigatorKey,
                         pageBuilder: (context, state) => const CupertinoPage(
                           child: DeviceColorSelectionScreen(),
+                        ),
+                      ),
+                      GoRoute(
+                        path: Routes.sonos.name,
+                        name: Routes.sonos.name,
+                        parentNavigatorKey: rootNavigatorKey,
+                        pageBuilder: (context, state) => const CupertinoPage(
+                          child: ScreenPageContent(child: SonosScreen()),
                         ),
                       ),
                       GoRoute(

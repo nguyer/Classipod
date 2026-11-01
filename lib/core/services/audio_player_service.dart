@@ -56,6 +56,14 @@ void _reconcileLibrary(Ref ref, LibraryAudioHandler handler) {
   final songs = now.nowPlayingType == NowPlayingType.songs && library != null
       ? library.toList()
       : now.metadataList;
+  if (handler.usingRemote &&
+      handler.songs.every(
+        (song) =>
+            !song.isSubsonic ||
+            (remote?.enabled == true && remote?.config?.id == song.serverId),
+      )) {
+    return;
+  }
   final retained = songs
       .where(
         (song) =>
@@ -195,7 +203,7 @@ class AudioPlayerServiceNotifier extends AsyncNotifier<void> {
 
   Future<void> _play() async {
     final handler = ref.read(libraryAudioHandlerProvider);
-    if (ref.read(audioPlayerProvider).playing &&
+    if (handler.isPlaying &&
         handler.playbackState.value.errorCode == null &&
         !handler.recovering) {
       return;
@@ -369,7 +377,11 @@ class AudioPlayerServiceNotifier extends AsyncNotifier<void> {
       //If Album or Playlist is being played then Switch to original List of Songs
       if (ref.read(nowPlayingDetailsProvider).nowPlayingType !=
               NowPlayingType.songs ||
-          ref.read(nowPlayingDetailsProvider).metadataList.isEmpty) {
+          ref.read(nowPlayingDetailsProvider).metadataList.isEmpty ||
+          !ref
+              .read(nowPlayingDetailsProvider)
+              .metadataList
+              .any((song) => song.identity == songId)) {
         await setAudioSource(
           musicMetadataList: ref.read(filteredAudioFilesProvider).requireValue,
         );
@@ -395,9 +407,7 @@ class AudioPlayerServiceNotifier extends AsyncNotifier<void> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final handler = ref.read(libraryAudioHandlerProvider);
-      if (handler.recovering
-          ? handler.wantsPlayback
-          : ref.read(audioPlayerProvider).playing) {
+      if (handler.recovering ? handler.wantsPlayback : handler.isPlaying) {
         await pause();
       } else {
         await _play();

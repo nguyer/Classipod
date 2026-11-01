@@ -20,6 +20,10 @@ a music subscription, offline server downloads, or server playlist syncing.
 
 ## ✨ Features
 
+- 🔊 Play Navidrome/Subsonic music on Sonos S2 rooms and groups through
+  **Settings → Sonos / Audio output**, with transport, seeking and room volume.
+  See [Sonos setup and limitations](docs/sonos-playback.md).
+
 ### 🗃️ Your library, local and streamed
 
 - 🌐 Stream from Subsonic-compatible servers such as Navidrome through

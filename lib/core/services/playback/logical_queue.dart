@@ -16,6 +16,8 @@ class LogicalQueue {
 
   int get length => _order.length;
 
+  List<int> get indices => List.unmodifiable(_order);
+
   int get position => _positions.isEmpty ? 0 : _positions[index];
 
   void reset(int length, {List<List<int>>? albums, int initialIndex = 0}) {

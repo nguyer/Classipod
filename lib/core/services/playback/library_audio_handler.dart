@@ -4,12 +4,75 @@ import 'package:audio_service/audio_service.dart';
 import 'package:classipod/core/models/music_metadata.dart';
 import 'package:classipod/core/models/playback_shuffle_mode.dart';
 import 'package:classipod/core/services/playback/logical_queue.dart';
+import 'package:classipod/core/services/playback/remote_audio_output.dart';
 import 'package:classipod/core/utils/album_order.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 class LibraryAudioHandler extends BaseAudioHandler {
   final AudioPlayer player;
+  RemoteAudioOutput? _remote;
+  StreamSubscription<RemotePlaybackState>? _remoteSubscription;
+  bool get usingRemote => _remote != null;
+  bool get isPlaying => _remote?.current.playing ?? player.playing;
+  double get remoteVolume => _remote?.current.volume ?? player.volume;
+  Future<void> setRemoteVolume(double value) =>
+      _remote?.setVolume(value) ?? Future.value();
+
+  Future<void> useRemoteOutput(RemoteAudioOutput? output) async {
+    _sourceVersion++;
+    _interruptSeek();
+    _cancelRecovery();
+    _wantPlayback = false;
+    await _serialize(() async {
+      await player.pause();
+      if (_remote != null) {
+        try {
+          await _remote!.pause();
+        } catch (_) {
+          if (output != null) rethrow;
+          // An unreachable speaker must not prevent returning to phone output.
+        }
+      }
+      await _remoteSubscription?.cancel();
+      _remote = output;
+      _sourceLoaded = false;
+      _error = null;
+      if (output != null) {
+        output.configure(_songs, logicalQueue.indices, logicalQueue.index);
+        await output.setRepeat(logicalQueue.loopMode);
+        _remoteSubscription = output.changes.listen((value) {
+          if (_disposed || _remote != output) return;
+          if (value.index >= 0 && value.index < _songs.length) {
+            logicalQueue.index = value.index;
+            _indices.add(value.index);
+            _publishRemoteMetadata();
+          }
+          _wantPlayback = value.playing;
+          _broadcast();
+        });
+      } else {
+        _initialPosition = _lastPosition;
+      }
+      _broadcast();
+    });
+  }
+
+  void _publishRemoteMetadata() {
+    if (_songs.isEmpty) return;
+    final song = _songs[logicalQueue.index];
+    mediaItem.add(
+      MediaItem(
+        id: 'classipod-current',
+        title: song.getTrackName,
+        album: song.albumName,
+        artist: song.getTrackArtistNames,
+        duration: Duration(milliseconds: song.getTrackDuration),
+        extras: {'songId': song.identity},
+      ),
+    );
+  }
+
   final Duration retryDelay;
   Timer? _retryTimer;
   bool _disposed = false;
@@ -36,7 +99,9 @@ class LibraryAudioHandler extends BaseAudioHandler {
 
   bool get recovering => _recovering;
   bool get wantsPlayback => _wantPlayback;
-  Duration get displayPosition => _recovering ? _resumePosition : _lastPosition;
+  Duration get displayPosition =>
+      _remote?.current.position ??
+      (_recovering ? _resumePosition : _lastPosition);
 
   void _cancelRecovery() {
     _retryTimer?.cancel();
@@ -90,7 +155,8 @@ class LibraryAudioHandler extends BaseAudioHandler {
   }) {
     _subscriptions.add(
       player.positionStream.listen((position) {
-        if (!_loading &&
+        if (_remote == null &&
+            !_loading &&
             _sourceLoaded &&
             _pendingSeek == null &&
             !_recovering &&
@@ -107,7 +173,8 @@ class LibraryAudioHandler extends BaseAudioHandler {
     _subscriptions.add(player.playingStream.listen((_) => _broadcast()));
     _subscriptions.add(
       player.processingStateStream.distinct().listen((processing) {
-        if (processing == ProcessingState.completed &&
+        if (_remote == null &&
+            processing == ProcessingState.completed &&
             player.playing &&
             !_loading) {
           unawaited(
@@ -226,6 +293,11 @@ class LibraryAudioHandler extends BaseAudioHandler {
   }
 
   Future<void> reconcileSongs(List<MusicMetadata> songs) async {
+    if (_remote != null) {
+      await _remote!.stop();
+      await setSongs(songs, preload: false);
+      return;
+    }
     final retainedIds = songs.map((song) => song.identity).toSet();
     final current = _songs.isEmpty ? null : _songs[logicalQueue.index];
     final removedCurrent =
@@ -271,6 +343,16 @@ class LibraryAudioHandler extends BaseAudioHandler {
     bool recovering = false,
     Duration initialPosition = Duration.zero,
   }) async {
+    if (_remote != null) {
+      logicalQueue.index = index;
+      _error = null;
+      _remote!.configure(_songs, logicalQueue.indices, index);
+      _indices.add(index);
+      _publishRemoteMetadata();
+      if (preload) await _remote!.select(index, play: startPlaying);
+      _broadcast();
+      return;
+    }
     if (!recovering) {
       _cancelRecovery();
       _initialPosition = null;
@@ -337,6 +419,7 @@ class LibraryAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> play() {
+    if (_remote != null) return _serialize(() => _remote!.play());
     _wantPlayback = true;
     _retryTimer?.cancel();
     _retryTimer = null;
@@ -364,6 +447,7 @@ class LibraryAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> pause() {
+    if (_remote != null) return _serialize(() => _remote!.pause());
     _interruptSeek();
     _wantPlayback = false;
     _retryTimer?.cancel();
@@ -376,6 +460,7 @@ class LibraryAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> stop() {
+    if (_remote != null) return _serialize(() => _remote!.stop());
     _interruptSeek();
     _wantPlayback = false;
     _retryTimer?.cancel();
@@ -389,6 +474,7 @@ class LibraryAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> seek(Duration position) {
+    if (_remote != null) return _serialize(() => _remote!.seek(position));
     _interruptSeek();
     final interrupted = Completer<void>();
     _pendingSeek = interrupted;
@@ -419,7 +505,20 @@ class LibraryAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> skipToNext() {
-    final next = logicalQueue.next();
+    final initialIndex = logicalQueue.index;
+    var next = logicalQueue.next();
+    if (_remote != null) {
+      for (
+        var count = 0;
+        next != null && !_songs[next].isSubsonic && count < _songs.length;
+        count++
+      ) {
+        logicalQueue.index = next;
+        next = logicalQueue.next();
+      }
+      if (next != null && !_songs[next].isSubsonic) next = null;
+      logicalQueue.index = initialIndex;
+    }
     return next == null
         ? Future.value()
         : select(next, startPlaying: _wantPlayback);
@@ -427,11 +526,28 @@ class LibraryAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> skipToPrevious() {
-    if ((_sourceLoaded && !_recovering ? player.position : displayPosition) >
+    if ((_remote == null && _sourceLoaded && !_recovering
+            ? player.position
+            : displayPosition) >
         const Duration(seconds: 3)) {
       return seek(Duration.zero);
     }
-    final previous = logicalQueue.previous();
+    final initialIndex = logicalQueue.index;
+    var previous = logicalQueue.previous();
+    if (_remote != null) {
+      for (
+        var count = 0;
+        previous != null &&
+            !_songs[previous].isSubsonic &&
+            count < _songs.length;
+        count++
+      ) {
+        logicalQueue.index = previous;
+        previous = logicalQueue.previous();
+      }
+      if (previous != null && !_songs[previous].isSubsonic) previous = null;
+      logicalQueue.index = initialIndex;
+    }
     return previous == null
         ? Future.value()
         : select(previous, startPlaying: _wantPlayback);
@@ -448,6 +564,7 @@ class LibraryAudioHandler extends BaseAudioHandler {
       AudioServiceRepeatMode.group => LoopMode.all,
       AudioServiceRepeatMode.none => LoopMode.off,
     };
+    if (_remote != null) await _remote!.setRepeat(logicalQueue.loopMode);
     _broadcast();
     onCheckpoint?.call();
   }
@@ -455,11 +572,13 @@ class LibraryAudioHandler extends BaseAudioHandler {
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
     logicalQueue.setShuffle(PlaybackShuffleMode.fromAudioService(shuffleMode));
+    if (_remote != null) await _remote!.setOrder(logicalQueue.indices);
     _broadcast();
     onCheckpoint?.call();
   }
 
   void _reportError(Object error) {
+    if (_remote != null) return;
     if (_restoredSongPending && onRestoreFailure != null) {
       _restoredSongPending = false;
       _sourceVersion++;
@@ -532,6 +651,38 @@ class LibraryAudioHandler extends BaseAudioHandler {
   }
 
   void _broadcast() {
+    final remote = _remote?.current;
+    if (remote != null) {
+      _lastPosition = remote.position;
+      playbackState.add(
+        PlaybackState(
+          controls: [
+            MediaControl.skipToPrevious,
+            remote.playing ? MediaControl.pause : MediaControl.play,
+            MediaControl.skipToNext,
+            MediaControl.stop,
+          ],
+          systemActions: const {MediaAction.seek},
+          androidCompactActionIndices: const [0, 1, 2],
+          processingState: remote.error != null
+              ? AudioProcessingState.error
+              : remote.loading
+              ? AudioProcessingState.loading
+              : AudioProcessingState.ready,
+          playing: remote.playing,
+          updatePosition: remote.position,
+          errorCode: remote.error == null ? null : 3,
+          errorMessage: remote.error == null ? null : 'Sonos playback unavailable. Check the speaker connection and server address.',
+          repeatMode: switch (logicalQueue.loopMode) {
+            LoopMode.off => AudioServiceRepeatMode.none,
+            LoopMode.one => AudioServiceRepeatMode.one,
+            LoopMode.all => AudioServiceRepeatMode.all,
+          },
+          shuffleMode: logicalQueue.shuffleMode.audioServiceMode,
+        ),
+      );
+      return;
+    }
     playbackState.add(
       PlaybackState(
         controls: [
@@ -589,6 +740,7 @@ class LibraryAudioHandler extends BaseAudioHandler {
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
+    await _remoteSubscription?.cancel();
     await _indices.close();
   }
 }

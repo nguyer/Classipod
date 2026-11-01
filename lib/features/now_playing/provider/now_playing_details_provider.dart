@@ -22,7 +22,6 @@ final nowPlayingDetailsProvider =
 class NowPlayingDetailsNotifier extends Notifier<NowPlayingModel> {
   @override
   NowPlayingModel build() {
-    final player = ref.read(audioPlayerProvider);
     final handler = ref.read(libraryAudioHandlerProvider);
     final subscriptions = <StreamSubscription<dynamic>>[];
     subscriptions.add(
@@ -40,7 +39,9 @@ class NowPlayingDetailsNotifier extends Notifier<NowPlayingModel> {
     );
 
     subscriptions.add(
-      player.playingStream.listen((isPlaying) {
+      handler.playbackState.map((value) => value.playing).distinct().listen((
+        isPlaying,
+      ) {
         if (isPlaying != state.isPlaying) {
           state = state.copyWith(isPlaying: isPlaying);
         }

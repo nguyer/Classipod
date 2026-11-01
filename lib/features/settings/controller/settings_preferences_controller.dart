@@ -386,6 +386,11 @@ class SettingsPreferencesControllerNotifier
   }
 
   Future<void> increaseVolume() async {
+    final handler = ref.read(libraryAudioHandlerProvider);
+    if (handler.usingRemote) {
+      await handler.setRemoteVolume((handler.remoteVolume + 0.05).clamp(0, 1));
+      return;
+    }
     if (state.volumeMode == VolumeMode.app) {
       final double currentVolume = ref.read(audioPlayerProvider).volume;
       if (currentVolume < 1) {
@@ -402,6 +407,11 @@ class SettingsPreferencesControllerNotifier
   }
 
   Future<void> decreaseVolume() async {
+    final handler = ref.read(libraryAudioHandlerProvider);
+    if (handler.usingRemote) {
+      await handler.setRemoteVolume((handler.remoteVolume - 0.05).clamp(0, 1));
+      return;
+    }
     if (state.volumeMode == VolumeMode.app) {
       final double currentVolume = ref.read(audioPlayerProvider).volume;
       if (currentVolume > 0) {
