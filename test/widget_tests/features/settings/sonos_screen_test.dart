@@ -113,7 +113,7 @@ void main() {
   }
 
   testWidgets(
-    'shows rooms, hides bonded devices and confirms output selection',
+    'shows rooms, hides bonded devices and selects without confirmation',
     (tester) async {
       final controller = ScreenController(
         SonosState(
@@ -126,9 +126,7 @@ void main() {
       expect(find.text('This phone'), findsWidgets);
       await tester.tap(find.text('Kitchen'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('replace this Sonos group'), findsOneWidget);
-      expect(controller.selected, isNull);
-      await confirm(tester);
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
       expect(controller.selected, 'Kitchen');
       await capture(tester, 'sonos-room-output');
       expect(find.text('Selected'), findsOneWidget);
@@ -190,4 +188,23 @@ void main() {
       await finish(tester);
     },
   );
+  testWidgets('wheel selection switches output without confirmation', (
+    tester,
+  ) async {
+    final controller = ScreenController(
+      SonosState(rooms: [room('Kitchen')]),
+    );
+    await open(tester, controller);
+    final dynamic screen = tester.state(find.byType(SonosScreen));
+    for (var i = 0; i < 3; i++) {
+      screen.scrollForward();
+      await tester.pump();
+    }
+    await screen.onSelectPressed();
+    await tester.pumpAndSettle();
+    expect(controller.selected, 'Kitchen');
+    expect(find.byType(CupertinoAlertDialog), findsNothing);
+    await finish(tester);
+  });
+
 }

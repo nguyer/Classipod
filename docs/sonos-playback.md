@@ -9,7 +9,8 @@ Choose **Find Sonos speakers**, then choose a room. If discovery is blocked by
 your network, use **Add speaker by IP address** with an IPv4 address from the
 Sonos app. A manual address still requires the phone to reach port 1400.
 
-Selecting a room pauses phone playback. It does not replace the room's existing
+Selecting a room switches output immediately without a confirmation dialog and
+pauses phone playback. It does not replace the room's existing
 queue until you play a track. Browse Classipod normally to play a server song,
 album or playlist. Starting playback replaces the selected group's Sonos queue.
 Classipod uploads the queue in batches of 16; a large queue can take time to
@@ -24,8 +25,10 @@ control a room explicitly.
 ## Music requirements
 
 Sonos fetches tracks directly from Navidrome/Subsonic using authenticated
-HTTP(S) URLs, requesting MP3 at up to 320 kbps. Enable MP3 transcoding on the
-server. The server URL must resolve and be reachable from the speaker itself:
+HTTP(S) URLs with `format=raw` and no bitrate limit. No transcoding setup is
+needed. Queue metadata uses the original track MIME type rather than forcing
+MP3. The speaker must support that original format. The server URL must resolve
+and be reachable from the speaker itself:
 a phone-only VPN, localhost address or self-signed HTTPS endpoint will not
 work merely because the phone can stream it. Song credentials/URLs are not
 logged or persisted in Classipod's Sonos settings; the speaker receives the
@@ -74,7 +77,8 @@ Tests use mock SOAP devices and player outputs for discovery parsing,
 XML/metadata escaping, fault handling, topology/bonded speakers, queue batches,
 track mapping, ownership changes, pause/resume/seek, repeat/shuffle, selected
 room volume, notification controls and output switching. Widget tests cover
-room selection, confirmation, permission errors and small-screen wheel
+immediate room selection, grouping confirmation, raw stream requests,
+original-format metadata, permission errors and small-screen wheel
 scrolling. A read-only network probe found six devices forming five visible
 rooms on the target S2 system; it did not change playback or grouping.
 Physical playback/grouping and the Android 17 permission prompt still require

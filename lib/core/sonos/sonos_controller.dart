@@ -195,13 +195,9 @@ class SonosController extends Notifier<SonosState> {
         final uri = await ref
             .read(subsonicControllerProvider.notifier)
             .resolveUri(song, allowLocal: false);
-        return uri.replace(
-          queryParameters: {
-            ...uri.queryParameters,
-            'format': 'mp3',
-            'maxBitRate': '320',
-          },
-        );
+        final query = {...uri.queryParameters, 'format': 'raw'};
+        query.remove('maxBitRate');
+        return uri.replace(queryParameters: query);
       },
     );
     try {

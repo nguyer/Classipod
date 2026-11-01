@@ -1,8 +1,11 @@
+import 'package:classipod/core/models/music_metadata.dart';
 import 'package:classipod/core/services/audio_player_service.dart';
 import 'package:classipod/core/services/playback/library_audio_handler.dart';
 import 'package:classipod/core/services/playback/remote_audio_output.dart';
 import 'package:classipod/core/sonos/sonos_client.dart';
 import 'package:classipod/core/sonos/sonos_controller.dart';
+import 'package:classipod/core/sonos/sonos_output.dart';
+import 'package:classipod/core/subsonic/subsonic_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -63,18 +66,36 @@ class Client extends SonosClient {
   }
 }
 
+class ServerController extends SubsonicController {
+  bool? allowedLocal;
+  @override
+  Future<SubsonicState> build() async => const SubsonicState();
+
+  @override
+  Future<Uri> resolveUri(MusicMetadata song, {bool allowLocal = true}) async {
+    allowedLocal = allowLocal;
+    return Uri.parse(
+      'https://music.test/rest/stream.view?id=track&t=token&s=salt'
+      '&format=mp3&maxBitRate=128',
+    );
+  }
+}
+
 void main() {
   late ProviderContainer container;
   late Native native;
   late Client client;
   late Handler handler;
   late SonosController controller;
+  late ServerController server;
   setUp(() {
     native = Native();
     client = Client();
     handler = Handler();
+    server = ServerController();
     container = ProviderContainer(
       overrides: [
+        subsonicControllerProvider.overrideWith(() => server),
         sonosNativeProvider.overrideWithValue(native),
         sonosClientProvider.overrideWithValue(client),
         sonosDiscoveryProvider.overrideWithValue(
@@ -127,4 +148,18 @@ void main() {
       expect(container.read(sonosControllerProvider).rooms, hasLength(2));
     },
   );
+  test('Sonos requests raw server media without a bitrate limit', () async {
+    await container.read(subsonicControllerProvider.future);
+    await controller.selectRoom(client.roomsList.first);
+    final output = handler.output! as SonosOutput;
+    final uri = await output.resolve(
+      MusicMetadata(serverId: 'server', remoteSongId: 'track'),
+    );
+    expect(server.allowedLocal, isFalse);
+    expect(uri.queryParameters['format'], 'raw');
+    expect(uri.queryParameters.containsKey('maxBitRate'), isFalse);
+    expect(uri.queryParameters['id'], 'track');
+    expect(uri.queryParameters['t'], 'token');
+    expect(uri.queryParameters['s'], 'salt');
+  });
 }

@@ -252,4 +252,28 @@ void main() {
     expect(output.current.playing, isTrue);
     expect(client.calls.where((c) => c.action == 'Play'), hasLength(1));
   });
+  test('DIDL advertises the original media type instead of forcing MP3', () {
+    for (final mime in ['audio/flac', 'audio/mpeg', 'audio/mp4', 'audio/wav']) {
+      final song = MusicMetadata(
+        serverId: 'server',
+        remoteSongId: 'track',
+        mimeType: mime,
+      );
+      final document = XmlDocument.parse(
+        sonosMetadata(song, remoteUri(song)),
+      );
+      final resource = document.descendants
+          .whereType<XmlElement>()
+          .firstWhere((element) => element.name.local == 'res');
+      expect(resource.getAttribute('protocolInfo'), 'http-get:*:$mime:*');
+    }
+    final unknown = remoteSong('unknown');
+    final document = XmlDocument.parse(
+      sonosMetadata(unknown, remoteUri(unknown)),
+    );
+    final resource = document.descendants
+        .whereType<XmlElement>()
+        .firstWhere((element) => element.name.local == 'res');
+    expect(resource.getAttribute('protocolInfo'), 'http-get:*:*:*');
+  });
 }

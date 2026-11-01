@@ -137,11 +137,7 @@ class _SonosScreenState extends ConsumerState<SonosScreen> with CustomScreen {
         (
           title: room.name,
           value: room.id == state.selectedId ? l.sonosSelected : null,
-          action: () async {
-            if (await _confirm(l.sonosSelectPrompt(room.name))) {
-              await controller.selectRoom(room);
-            }
-          },
+          action: () => controller.selectRoom(room),
         ),
       if (state.selected != null) ...[
         (

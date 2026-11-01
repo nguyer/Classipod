@@ -8,6 +8,8 @@ import 'package:just_audio/just_audio.dart';
 import 'package:xml/xml.dart';
 
 String sonosMetadata(MusicMetadata song, Uri uri) {
+  final sourceType = song.mimeType?.split(';').first.trim();
+  final mimeType = sourceType == null || sourceType.isEmpty ? '*' : sourceType;
   final xml = XmlBuilder();
   xml.element(
     'DIDL-Lite',
@@ -32,7 +34,7 @@ String sonosMetadata(MusicMetadata song, Uri uri) {
           xml.element('upnp:class', nest: 'object.item.audioItem.musicTrack');
           xml.element(
             'res',
-            attributes: {'protocolInfo': 'http-get:*:audio/mpeg:*'},
+            attributes: {'protocolInfo': 'http-get:*:$mimeType:*'},
             nest: uri.toString(),
           );
         },

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Switch Sonos output immediately without a confirmation dialog. Request
+  original/raw server audio without a bitrate limit or transcoding, and
+  advertise each track's original media type to the speaker.
+
 - Add Sonos S2 room discovery, output selection, transport/seek controls,
   per-room volume, grouping and ungrouping for Navidrome/Subsonic music.
   Queue tracks on the group coordinator so playback continues without the
